@@ -27,6 +27,7 @@ csv = "1"
 
 ark-inner-products = { path = "../inner_products" }
 ark-ip-proofs = { path = "../ip_proofs" }
+ark-ip-proofs2 = { path = "../ip_proofs2" }
 ark-dh-commitments = { path = "../dh_commitments" }
 
 [[bench]]
@@ -42,6 +43,11 @@ harness = false
 [[bench]]
 name = "tipa"
 path = "benches/tipa.rs"
+harness = false
+
+[[bench]]
+name = "dory"
+path = "benches/dory.rs"
 harness = false
 
 [[bench]]
