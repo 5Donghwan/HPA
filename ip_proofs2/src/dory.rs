@@ -108,7 +108,6 @@ where
         ck: (&[LMC::Key], &[RMC::Key], &IPC::Key),
         com: (&LMC::Output, &RMC::Output, &IPC::Output),
     ) -> Result<DORYProof<IP, LMC, RMC, IPC, D>, Error> {
-        println!("Dory run");
         if IP::inner_product(values.0, values.1)? != values.2.clone() {
             return Err(Box::new(InnerProductArgumentError::InnerProductInvalid));
         }
@@ -170,7 +169,6 @@ where
     > {
         let (m_a, m_b) = values;
         let (ck_a, ck_b, ck_t) = ck;
-        println!("Dory run");
         
         Self::_prove(
             (m_a.to_vec(), m_b.to_vec()),

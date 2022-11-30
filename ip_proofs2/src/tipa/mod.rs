@@ -298,6 +298,7 @@ where
             && RMC::verify(&vec![ck_b_final.clone()], &b_base, &com_b)?
             && IPC::verify(&vec![ck_t.clone()], &t_base, &com_t)?;
 
+        println!("Verification : {}",ck_a_valid && ck_b_valid && base_valid);
         Ok(ck_a_valid && ck_b_valid && base_valid)
     }
 }
