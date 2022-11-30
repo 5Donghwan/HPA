@@ -95,11 +95,10 @@ where
 
 #[derive(Clone)]
 pub struct SRS<P: PairingEngine> {
-    pub g_alpha_powers: Vec<P::G1Projective>,
-    pub h_beta_powers: Vec<P::G2Projective>,
-    pub g_beta: P::G1Projective,
-    pub h_alpha: P::G2Projective,
+    pub gamma1: Vec<P::G1Projective>,
+    pub gamma2: Vec<P::G2Projective>,
 }
+
 
 #[derive(Clone)]
 pub struct VerifierSRS<P: PairingEngine> {
@@ -111,18 +110,16 @@ pub struct VerifierSRS<P: PairingEngine> {
 
 //TODO: Change SRS to return reference iterator - requires changes to TIPA and DORY signatures
 impl<P: PairingEngine> SRS<P> {
-    pub fn get_commitment_keys(&self) -> (Vec<P::G2Projective>, Vec<P::G1Projective>) {
-        let ck_1 = self.h_beta_powers.iter().step_by(2).cloned().collect();
-        let ck_2 = self.g_alpha_powers.iter().step_by(2).cloned().collect();
-        (ck_1, ck_2)
+    pub fn get_commitment_keys(&self) -> (Vec<P::G1Projective>, Vec<P::G2Projective>) {
+        let gamma1 = self.gamma1.clone();
+        let gamma2 = self.gamma2.clone();
+        (gamma1, gamma2)
     }
 
-    pub fn get_verifier_key(&self) -> VerifierSRS<P> {
-        VerifierSRS {
-            g: self.g_alpha_powers[0].clone(),
-            h: self.h_beta_powers[0].clone(),
-            g_beta: self.g_beta.clone(),
-            h_alpha: self.h_alpha.clone(),
+    pub fn get_verifier_key(&self) -> SRS<P> {
+        SRS {
+            gamma1: self.gamma1.clone(),
+            gamma2: self.gamma2.clone(),
         }
     }
 }
@@ -148,20 +145,21 @@ where
     RMC::Output: MulAssign<P::Fr>,
     IPC::Output: MulAssign<P::Fr>,
 {
-    pub fn setup<R: Rng>(rng: &mut R, size: usize) -> Result<(SRS<P>, IPC::Key), Error> {
-        let alpha = <P::Fr>::rand(rng);
-        let beta = <P::Fr>::rand(rng);
-        let g = <P::G1Projective>::prime_subgroup_generator();
-        let h = <P::G2Projective>::prime_subgroup_generator();
-        Ok((
+    pub fn setup<R: Rng>(rng: &mut R, size: usize) -> Result<SRS<P>, Error> {
+        let mut gamma1 = Vec::new();
+        let mut gamma2 = Vec::new();
+
+        for _ in 0..size {
+            gamma1.push(<P::G1Projective>::rand(rng));
+            gamma2.push(<P::G2Projective>::rand(rng));
+        }
+        
+        Ok(
             SRS {
-                g_alpha_powers: structured_generators_scalar_power(2 * size - 1, &g, &alpha),
-                h_beta_powers: structured_generators_scalar_power(2 * size - 1, &h, &beta),
-                g_beta: g.mul(beta.into_repr()),
-                h_alpha: h.mul(alpha.into_repr()),
-            },
-            IPC::setup(rng, 1)?.pop().unwrap(),
-        ))
+                gamma1,
+                gamma2,
+            }
+        )
     }
 
     pub fn prove(

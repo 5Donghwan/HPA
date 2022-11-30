@@ -3,6 +3,7 @@ use std::{
     error::Error as ErrorTrait,
     fmt::{Display, Formatter, Result as FmtResult},
     ops::MulAssign,
+    ops::AddAssign,
 };
 
 pub mod applications;
@@ -15,6 +16,12 @@ pub type Error = Box<dyn ErrorTrait>;
 pub(crate) fn mul_helper<T: MulAssign<F> + Clone, F: Clone>(t: &T, f: &F) -> T {
     let mut clone = t.clone();
     clone.mul_assign(f.clone());
+    clone
+}
+
+pub(crate) fn add_helper<T: AddAssign<F> + Clone, F: Clone>(t: &T, f: &F) -> T {
+    let mut clone = t.clone();
+    clone.add_assign(f.clone());
     clone
 }
 

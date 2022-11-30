@@ -1,3 +1,4 @@
+use ark_ec::PairingEngine;
 use ark_ff::{to_bytes, Field, One};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_std::rand::Rng;
@@ -5,7 +6,7 @@ use ark_std::{end_timer, start_timer};
 use digest::Digest;
 use std::{convert::TryInto, marker::PhantomData, ops::MulAssign};
 
-use crate::{mul_helper, Error, InnerProductArgumentError};
+use crate::{mul_helper, Error, InnerProductArgumentError, add_helper};
 use ark_dh_commitments::DoublyHomomorphicCommitment;
 use ark_inner_products::InnerProduct;
 use ark_std::cfg_iter;
@@ -179,7 +180,8 @@ where
     // Returns vector of recursive commitments and transcripts in reverse order
     fn _prove(
         values: (Vec<IP::LeftMessage>, Vec<IP::RightMessage>),
-        ck: (Vec<LMC::Key>, Vec<RMC::Key>, Vec<IPC::Key>),
+        ck: (Vec<RMC::Key>, Vec<LMC::Key>),
+        ck_message: (Vec<LMC::Message>, Vec<RMC::Message>),
     ) -> Result<
         (
             DORYProof<IP, LMC, RMC, IPC, D>,
@@ -187,42 +189,82 @@ where
         ),
         Error,
     > {
-        let (mut m_a, mut m_b) = values;
-        let (mut ck_a, mut ck_b, ck_t) = ck;
+        let (mut v1, mut v2) = values;
+        let (mut gamma1, mut gamma2) = ck;
+        let (mut gamma1_message, mut gamma2_message) = ck_message;
         let mut r_commitment_steps = Vec::new();
         let mut r_transcript = Vec::new();
-        assert!(m_a.len().is_power_of_two());
+        assert!(v1.len().is_power_of_two());
         let (m_base, ck_base) = 'recurse: loop {
             let recurse = start_timer!(|| format!("Recurse round size {}", m_a.len()));
-            if m_a.len() == 1 {
+            if v1.len() == 1 {
                 // base case
                 break 'recurse (
-                    (m_a[0].clone(), m_b[0].clone()),
-                    (ck_a[0].clone(), ck_b[0].clone()),
+                    (v1[0].clone(), v2[0].clone()),
+                    (gamma1[0].clone(), gamma2[0].clone()),
                 );
             } else {
                 // recursive step
                 // Recurse with problem of half size
-                let split = m_a.len() / 2;
+                let split = v1.len() / 2;
 
-                let m_a_1 = &m_a[split..];
-                let m_a_2 = &m_a[..split];
-                let ck_a_1 = &ck_a[..split];
-                let ck_a_2 = &ck_a[split..];
+                let v1_L = &v1[split..];
+                let v1_R = &v1[..split];
+                let gamma1_prime = &gamma1[..split];
+                let gamma1_message_prime = &gamma1_message[..split];
 
-                let m_b_1 = &m_b[..split];
-                let m_b_2 = &m_b[split..];
-                let ck_b_1 = &ck_b[split..];
-                let ck_b_2 = &ck_b[..split];
+                let v2_L = &v2[..split];
+                let v2_R = &v2[split..];
+                let gamma2_prime = &gamma2[split..];
+                let gamma2_message_prime = &gamma2_message[split..];
 
-                let cl = start_timer!(|| "Commit L");
-                let com_1 = (
-                    LMC::commit(ck_a_1, m_a_1)?,
-                    RMC::commit(ck_b_1, m_b_1)?,
-                    IPC::commit(&ck_t, &vec![IP::inner_product(m_a_1, m_b_1)?])?,
-                );
+                let cl = start_timer!(|| "Compute D");
+                let d1_L = LMC::commit(gamma2_prime, v1_L)?;
+                let d1_R = LMC::commit(gamma2_prime, v1_R)?;
+                let d2_L = RMC::commit(gamma1_prime, v2_L)?;
+                let d2_R = RMC::commit(gamma1_prime, v2_R)?;
+                
+                 // Fiat-Shamir challenge
+                 let mut counter_nonce: usize = 0;
+                 let default_transcript = Default::default();
+                 let transcript = r_transcript.last().unwrap_or(&default_transcript);
+                 let (beta, beta_inv) = 'challenge: loop {
+                     let mut hash_input = Vec::new();
+                     hash_input.extend_from_slice(&counter_nonce.to_be_bytes()[..]);
+                     //TODO: Should use CanonicalSerialize instead of ToBytes
+                     hash_input.extend_from_slice(&to_bytes![
+                         transcript, d1_L, d1_R, d2_L, d2_R
+                     ]?);
+                     let beta: LMC::Scalar = u128::from_be_bytes(
+                         D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
+                     )
+                     .into();
+                     if let Some(beta_inv) = beta.inverse() {
+                         // Optimization for multiexponentiation to rescale G2 elements with 128-bit challenge
+                         // Swap 'c' and 'c_inv' since can't control bit size of c_inv
+                         break 'challenge (beta_inv, beta);
+                     }
+                     counter_nonce += 1;
+                 };
+                 
                 end_timer!(cl);
-                let cr = start_timer!(|| "Commit R");
+
+                let gamma1_message_temp = cfg_iter!(gamma1_message)
+                    .map(|gamma| mul_helper(gamma, &beta)).collect::<Vec<LMC::Message>>();
+
+
+                let gamma2_message_temp = cfg_iter!(gamma2_message)
+                    .map(|gamma| mul_helper(gamma, &beta_inv)).collect::<Vec<RMC::Message>>();
+
+                for i in 0..v1.len() {
+                    v1[i] = v1[i] + gamma1_message_temp[i];
+                    v2[i] = v2[i] + gamma2_message_temp[i];
+                }
+
+                // compute C and message rescale
+
+                
+                let cr = start_timer!(|| "Compute C");
                 let com_2 = (
                     LMC::commit(ck_a_2, m_a_2)?,
                     RMC::commit(ck_b_2, m_b_2)?,

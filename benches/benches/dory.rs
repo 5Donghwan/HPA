@@ -5,13 +5,12 @@ use ark_dh_commitments::{
     // pedersen::PedersenCommitment,
     DoublyHomomorphicCommitment,
 };
-use ark_ec::{group::Group, PairingEngine};
-use ark_ff::{Field, UniformRand};
+use ark_ec::{PairingEngine};
+use ark_ff::{UniformRand};
 use ark_inner_products::{
-    ExtensionFieldElement, InnerProduct, MultiexponentiationInnerProduct, PairingInnerProduct,
+    ExtensionFieldElement, InnerProduct, PairingInnerProduct,
 };
 use ark_ip_proofs2::tipa::{
-    structured_scalar_message::{structured_scalar_power, TIPAWithSSM},
     TIPACompatibleSetup, TIPA2,
 };
 
@@ -21,7 +20,7 @@ use digest::Digest;
 
 use std::{ops::MulAssign, time::Instant};
 
-fn bench_tipa<IP, LMC, RMC, IPC, P, D, R: Rng>(rng: &mut R, len: usize)
+fn bench_dory<IP, LMC, RMC, IPC, P, D, R: Rng>(rng: &mut R, len: usize)
 where
     D: Digest,
     P: PairingEngine,
@@ -45,12 +44,14 @@ where
     IP::LeftMessage: UniformRand,
     IP::RightMessage: UniformRand,
 {
-    let mut l = Vec::new();
+    let mut l = Vec::new(); 
     let mut r = Vec::new();
+  
     for _ in 0..len {
         l.push(<IP::LeftMessage>::rand(rng));
         r.push(<IP::RightMessage>::rand(rng));
     }
+
 
     let (srs, ck_t) = TIPA2::<IP, LMC, RMC, IPC, P, D>::setup(rng, len).unwrap();
     let (ck_l, ck_r) = srs.get_commitment_keys();
@@ -81,7 +82,7 @@ fn main() {
     println!("Benchmarking TIPA with vector length: {}", LEN);
 
     println!("1) Pairing inner product...");
-    bench_tipa::<
+    bench_dory::<
         PairingInnerProduct<Bls12_381>,
         GC1,
         GC2,
