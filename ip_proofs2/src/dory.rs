@@ -309,7 +309,7 @@ where
                 end_timer!(rescale_v2);
 
                 r_commitment_steps.push((d1_L, d1_R, d2_L, d2_R, c_plus, c_minus));
-                r_transcript.push(alpha, beta);
+                r_transcript.push((alpha, beta));
                 end_timer!(recurse);
             }
         };
