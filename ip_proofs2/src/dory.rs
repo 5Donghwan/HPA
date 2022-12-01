@@ -263,73 +263,53 @@ where
 
                 // compute C and message rescale
 
-                
+
                 let cr = start_timer!(|| "Compute C");
-                let com_2 = (
-                    LMC::commit(ck_a_2, m_a_2)?,
-                    RMC::commit(ck_b_2, m_b_2)?,
-                    IPC::commit(&ck_t, &vec![IP::inner_product(m_a_2, m_b_2)?])?,
-                );
+
+                let c_plus = vec![IP::inner_product(&v1_L, &v2_R).unwrap()];
+                let c_minus = vec![IP::inner_product(&v1_R, &v2_L).unwrap()];
+           
                 end_timer!(cr);
 
-                // Fiat-Shamir challenge
-                let mut counter_nonce: usize = 0;
-                let default_transcript = Default::default();
-                let transcript = r_transcript.last().unwrap_or(&default_transcript);
-                let (c, c_inv) = 'challenge: loop {
+                // Second Fiat-Shamir challenge
+                let (alpha, alpha_inv) = 'challenge: loop {
                     let mut hash_input = Vec::new();
                     hash_input.extend_from_slice(&counter_nonce.to_be_bytes()[..]);
                     //TODO: Should use CanonicalSerialize instead of ToBytes
                     hash_input.extend_from_slice(&to_bytes![
-                        transcript, com_1.0, com_1.1, com_1.2, com_2.0, com_2.1, com_2.2
+                        transcript, c_plus, c_minus
                     ]?);
-                    let c: LMC::Scalar = u128::from_be_bytes(
+                    let alpha: LMC::Scalar = u128::from_be_bytes(
                         D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
                     )
                     .into();
-                    if let Some(c_inv) = c.inverse() {
+                    if let Some(alpha_inv) = alpha.inverse() {
                         // Optimization for multiexponentiation to rescale G2 elements with 128-bit challenge
                         // Swap 'c' and 'c_inv' since can't control bit size of c_inv
-                        break 'challenge (c_inv, c);
+                        break 'challenge (alpha_inv, alpha);
                     }
                     counter_nonce += 1;
                 };
 
                 // Set up values for next step of recursion
-                let rescale_m1 = start_timer!(|| "Rescale M1");
-                m_a = cfg_iter!(m_a_1)
-                    .map(|a| mul_helper(a, &c))
-                    .zip(m_a_2)
+                let rescale_v1 = start_timer!(|| "Rescale V1");
+                v1 = cfg_iter!(v1_L)
+                    .map(|a| mul_helper(a, &alpha))
+                    .zip(v1_R)
                     .map(|(a_1, a_2)| a_1 + a_2.clone())
                     .collect::<Vec<LMC::Message>>();
-                end_timer!(rescale_m1);
+                end_timer!(rescale_v1);
 
-                let rescale_m2 = start_timer!(|| "Rescale M2");
-                m_b = cfg_iter!(m_b_2)
-                    .map(|b| mul_helper(b, &c_inv))
-                    .zip(m_b_1)
+                let rescale_v2 = start_timer!(|| "Rescale V2");
+                v2 = cfg_iter!(v2_L)
+                    .map(|b| mul_helper(b, &alpha_inv))
+                    .zip(v2_R)
                     .map(|(b_1, b_2)| b_1 + b_2.clone())
                     .collect::<Vec<RMC::Message>>();
-                end_timer!(rescale_m2);
+                end_timer!(rescale_v2);
 
-                let rescale_ck1 = start_timer!(|| "Rescale CK1");
-                ck_a = cfg_iter!(ck_a_2)
-                    .map(|a| mul_helper(a, &c_inv))
-                    .zip(ck_a_1)
-                    .map(|(a_1, a_2)| a_1 + a_2.clone())
-                    .collect::<Vec<LMC::Key>>();
-                end_timer!(rescale_ck1);
-
-                let rescale_ck2 = start_timer!(|| "Rescale CK2");
-                ck_b = cfg_iter!(ck_b_1)
-                    .map(|b| mul_helper(b, &c))
-                    .zip(ck_b_2)
-                    .map(|(b_1, b_2)| b_1 + b_2.clone())
-                    .collect::<Vec<RMC::Key>>();
-                end_timer!(rescale_ck2);
-
-                r_commitment_steps.push((com_1, com_2));
-                r_transcript.push(c);
+                r_commitment_steps.push((d1_L, d1_R, d2_L, d2_R, c_plus, c_minus));
+                r_transcript.push(alpha, beta);
                 end_timer!(recurse);
             }
         };
