@@ -1,4 +1,3 @@
-use ark_ec::PairingEngine;
 use ark_ff::{to_bytes, Field, One};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_std::rand::Rng;
@@ -6,7 +5,7 @@ use ark_std::{end_timer, start_timer};
 use digest::Digest;
 use std::{convert::TryInto, marker::PhantomData, ops::MulAssign};
 
-use crate::{mul_helper, Error, InnerProductArgumentError, add_helper};
+use crate::{mul_helper, Error, InnerProductArgumentError};
 use ark_dh_commitments::DoublyHomomorphicCommitment;
 use ark_inner_products::InnerProduct;
 use ark_std::cfg_iter;
@@ -42,10 +41,10 @@ where
     IPC::Output: MulAssign<LMC::Scalar>,
 {
     pub(crate) r_commitment_steps: Vec<(
-        (LMC::Output, RMC::Output, IPC::Output),
-        (LMC::Output, RMC::Output, IPC::Output),
+        (LMC::Output, RMC::Output, IPC::Message), 
+        (LMC::Output, RMC::Scalar, IPC::Message),
     )>,
-    pub(crate) r_base: (LMC::Message, RMC::Message),
+    // pub(crate) r_base: (LMC::Message, RMC::Message),
     _dory: PhantomData<DORY<IP, LMC, RMC, IPC, D>>,
 }
 
@@ -69,7 +68,7 @@ where
     IPC::Output: MulAssign<LMC::Scalar>,
 {
     pub(crate) r_transcript: Vec<LMC::Scalar>,
-    pub(crate) ck_base: (LMC::Key, RMC::Key),
+    // pub(crate) ck_base: (LMC::Key, RMC::Key),
     _dory: PhantomData<DORY<IP, LMC, RMC, IPC, D>>,
 }
 
@@ -106,8 +105,9 @@ where
 
     pub fn prove(
         values: (&[IP::LeftMessage], &[IP::RightMessage], &IP::Output),
-        ck: (&[LMC::Key], &[RMC::Key], &IPC::Key),
-        com: (&LMC::Output, &RMC::Output, &IPC::Output),
+        ck: (&[RMC::Key], &[LMC::Key]),
+        ck_message: (&[LMC::Message], &[RMC::Message]),
+        com: (&LMC::Output, &RMC::Output),
     ) -> Result<DORYProof<IP, LMC, RMC, IPC, D>, Error> {
         if IP::inner_product(values.0, values.1)? != values.2.clone() {
             return Err(Box::new(InnerProductArgumentError::InnerProductInvalid));
@@ -119,15 +119,17 @@ where
                 values.1.len(),
             )));
         }
-        if !(LMC::verify(ck.0, values.0, com.0)?
-            && RMC::verify(ck.1, values.1, com.1)?
-            && IPC::verify(&vec![ck.2.clone()], &vec![values.2.clone()], com.2)?)
+        if !(LMC::verify(ck.1, values.0, com.0)?
+            && RMC::verify(ck.0, values.1, com.1)?
+            )
         {
             return Err(Box::new(InnerProductArgumentError::InnerProductInvalid));
         }
 
+        // TODO : compare ck and ck_message
+
         let (proof, _) =
-            Self::prove_with_aux((values.0, values.1), (ck.0, ck.1, &vec![ck.2.clone()]))?;
+            Self::prove_with_aux((values.0, values.1), (ck.0, ck.1), (ck_message.0, ck_message.1))?;
         Ok(proof)
     }
 
@@ -160,7 +162,8 @@ where
 
     pub fn prove_with_aux(
         values: (&[IP::LeftMessage], &[IP::RightMessage]),
-        ck: (&[LMC::Key], &[RMC::Key], &[IPC::Key]),
+        ck: (&[RMC::Key], &[LMC::Key]),
+        ck_message: (&[LMC::Message], &[RMC::Message]),
     ) -> Result<
         (
             DORYProof<IP, LMC, RMC, IPC, D>,
@@ -168,12 +171,13 @@ where
         ),
         Error,
     > {
-        let (m_a, m_b) = values;
-        let (ck_a, ck_b, ck_t) = ck;
-        
+        let (v1, v2) = values;
+        let (gamma1, gamma2) = ck;
+        let (gamma1_message, gamma2_message) = ck_message;
         Self::_prove(
-            (m_a.to_vec(), m_b.to_vec()),
-            (ck_a.to_vec(), ck_b.to_vec(), ck_t.to_vec()),
+            (v1.to_vec(), v2.to_vec()),
+            (gamma1.to_vec(), gamma2.to_vec()),
+            (gamma1_message.to_vec(), gamma2_message.to_vec()),
         )
     }
 
@@ -226,14 +230,14 @@ where
                 
                  // Fiat-Shamir challenge
                  let mut counter_nonce: usize = 0;
-                 let default_transcript = Default::default();
+                 let default_transcript = (Default::default(),Default::default());
                  let transcript = r_transcript.last().unwrap_or(&default_transcript);
                  let (beta, beta_inv) = 'challenge: loop {
                      let mut hash_input = Vec::new();
                      hash_input.extend_from_slice(&counter_nonce.to_be_bytes()[..]);
                      //TODO: Should use CanonicalSerialize instead of ToBytes
                      hash_input.extend_from_slice(&to_bytes![
-                         transcript, d1_L, d1_R, d2_L, d2_R
+                         transcript.0, transcript.1, d1_L, d1_R, d2_L, d2_R
                      ]?);
                      let beta: LMC::Scalar = u128::from_be_bytes(
                          D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
@@ -266,8 +270,8 @@ where
 
                 let cr = start_timer!(|| "Compute C");
 
-                let c_plus = vec![IP::inner_product(&v1_L, &v2_R).unwrap()];
-                let c_minus = vec![IP::inner_product(&v1_R, &v2_L).unwrap()];
+                let c_plus = IP::inner_product(&v1_L, &v2_R).unwrap();
+                let c_minus = IP::inner_product(&v1_R, &v2_L).unwrap();
            
                 end_timer!(cr);
 
@@ -277,7 +281,7 @@ where
                     hash_input.extend_from_slice(&counter_nonce.to_be_bytes()[..]);
                     //TODO: Should use CanonicalSerialize instead of ToBytes
                     hash_input.extend_from_slice(&to_bytes![
-                        transcript, c_plus, c_minus
+                        transcript.0, transcript.1, c_plus, c_minus
                     ]?);
                     let alpha: LMC::Scalar = u128::from_be_bytes(
                         D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
@@ -308,7 +312,10 @@ where
                     .collect::<Vec<RMC::Message>>();
                 end_timer!(rescale_v2);
 
-                r_commitment_steps.push((d1_L, d1_R, d2_L, d2_R, c_plus, c_minus));
+                let com1 = (d1_L, d2_L, c_plus);
+                let com2 = (d1_R, d2_R, c_minus);
+
+                r_commitment_steps.push((com1, com2));
                 r_transcript.push((alpha, beta));
                 end_timer!(recurse);
             }
@@ -318,12 +325,12 @@ where
         Ok((
             DORYProof {
                 r_commitment_steps,
-                r_base: m_base,
+                // r_base: m_base,
                 _dory: PhantomData,
             },
             DORYAux {
                 r_transcript,
-                ck_base,
+                // ck_base,
                 _dory: PhantomData,
             },
         ))
@@ -450,7 +457,7 @@ where
     fn clone(&self) -> Self {
         DORYProof {
             r_commitment_steps: self.r_commitment_steps.clone(),
-            r_base: self.r_base.clone(),
+            // r_base: self.r_base.clone(),
             _dory: PhantomData,
         }
     }
