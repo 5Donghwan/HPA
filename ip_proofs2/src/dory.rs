@@ -42,9 +42,38 @@ where
 {
     pub(crate) r_commitment_steps: Vec<(
         (LMC::Output, RMC::Output, IPC::Message), 
-        (LMC::Output, RMC::Scalar, IPC::Message),
+        (LMC::Output, RMC::Output, IPC::Message),
     )>,
     // pub(crate) r_base: (LMC::Message, RMC::Message),
+    _dory: PhantomData<DORY<IP, LMC, RMC, IPC, D>>,
+}
+
+
+#[derive(Clone)]
+pub struct DORYSRS<IP, LMC, RMC, IPC, D>
+where
+    D: Digest,
+    IP: InnerProduct<
+        LeftMessage = LMC::Message,
+        RightMessage = RMC::Message,
+        Output = IPC::Message,
+    >,
+    LMC: DoublyHomomorphicCommitment,
+    RMC: DoublyHomomorphicCommitment<Scalar = LMC::Scalar>,
+    IPC: DoublyHomomorphicCommitment<Scalar = LMC::Scalar>,
+    RMC::Message: MulAssign<LMC::Scalar>,
+    IPC::Message: MulAssign<LMC::Scalar>,
+    RMC::Key: MulAssign<LMC::Scalar>,
+    IPC::Key: MulAssign<LMC::Scalar>,
+    RMC::Output: MulAssign<LMC::Scalar>,
+    IPC::Output: MulAssign<LMC::Scalar>,
+{
+    pub(crate) delta1_L: Vec<IP::Output>,
+    pub(crate) delta1_R: Vec<IP::Output>,
+    pub(crate) delta2_L: Vec<IP::Output>,
+    pub(crate) delta2_R: Vec<IP::Output>,
+    pub(crate) kai: Vec<IP::Output>,
+    
     _dory: PhantomData<DORY<IP, LMC, RMC, IPC, D>>,
 }
 
@@ -67,7 +96,7 @@ where
     RMC::Output: MulAssign<LMC::Scalar>,
     IPC::Output: MulAssign<LMC::Scalar>,
 {
-    pub(crate) r_transcript: Vec<LMC::Scalar>,
+    pub(crate) r_transcript: Vec<(LMC::Scalar, LMC::Scalar, LMC::Scalar, LMC::Scalar)>,
     // pub(crate) ck_base: (LMC::Key, RMC::Key),
     _dory: PhantomData<DORY<IP, LMC, RMC, IPC, D>>,
 }
@@ -103,13 +132,53 @@ where
         ))
     }
 
+    pub fn precompute(
+        ck_message: (&[LMC::Message], &[RMC::Message]),
+    ) -> Result<DORYSRS<IP,LMC,RMC,IPC,D>, Error> {
+        // loop : until ck.len() >= 1
+        let (mut gamma1, mut gamma2) = ck_message;
+        let mut i = ck_message.0.len();
+        let mut split = ck_message.0.len()/2;
+        let mut delta1_L = Vec::new();
+        let mut delta1_R = Vec::new();
+        let mut delta2_L = Vec::new();
+        let mut delta2_R = Vec::new();
+        let mut kai = Vec::new();
+
+        while i >= 1 {
+            // Generate gamma1, gamma2, gamma1_prime, gamma2_prime
+            let mut split = ck_message.0.len()/2;
+            let mut gamma1_prime = &gamma1[..split];
+            let mut gamma2_prime = &gamma2[..split];
+            // Generate gamma1_R, gamma2_R (replace gamma1_L to gamma1_prime)
+            let mut gamma1_R = &gamma1[split..];
+            let mut gamma2_R = &gamma2[split..];
+            // Compute delta1_L, delta1_R, delta2_L, delta2_R, kai
+            delta1_L.push(IP::inner_product(gamma1_prime, gamma2_prime)?);
+            delta1_R.push(IP::inner_product(gamma1_R, gamma2_prime)?);
+            delta2_R.push(IP::inner_product(gamma1_prime, gamma2_R)?);
+            kai.push(IP::inner_product(gamma1, gamma2)?);
+            
+            split = split/2;
+            i = i/2;
+        }
+        delta2_L = delta1_L.clone();
+        delta1_L.reverse();
+        delta1_R.reverse();
+        delta2_L.reverse();
+        delta2_R.reverse();
+        kai.reverse();
+
+        Ok(DORYSRS { delta1_L: delta1_L, delta1_R: delta1_R, delta2_L: delta2_L, delta2_R: delta2_R, kai: kai, _dory: PhantomData })
+    }
+
     pub fn prove(
-        values: (&[IP::LeftMessage], &[IP::RightMessage], &IP::Output),
+        values: (&[IP::LeftMessage], &[IP::RightMessage]),
         ck: (&[RMC::Key], &[LMC::Key]),
         ck_message: (&[LMC::Message], &[RMC::Message]),
-        com: (&LMC::Output, &RMC::Output),
+        com: (&LMC::Output, &RMC::Output, &IP::Output),
     ) -> Result<DORYProof<IP, LMC, RMC, IPC, D>, Error> {
-        if IP::inner_product(values.0, values.1)? != values.2.clone() {
+        if IP::inner_product(values.0, values.1)? != com.2.clone() {
             return Err(Box::new(InnerProductArgumentError::InnerProductInvalid));
         }
         if values.0.len().count_ones() != 1 {
@@ -134,8 +203,9 @@ where
     }
 
     pub fn verify(
-        ck: (&[LMC::Key], &[RMC::Key], &IPC::Key),
-        com: (&LMC::Output, &RMC::Output, &IPC::Output),
+        srs: &DORYSRS<IP, LMC, RMC, IPC, D>,  //
+        ck: (&[LMC::Key], &[RMC::Key]),
+        com: (&LMC::Output, &RMC::Output, &IP::Output), // com ( d1, d2, c )
         proof: &DORYProof<IP, LMC, RMC, IPC, D>,
     ) -> Result<bool, Error> {
         if ck.0.len().count_ones() != 1 || ck.0.len() != ck.1.len() {
@@ -145,19 +215,41 @@ where
                 ck.1.len(),
             )));
         }
-        // Calculate base commitment and transcript
-        let (base_com, transcript) = Self::_compute_recursive_challenges(
-            (com.0.clone(), com.1.clone(), com.2.clone()),
+        // Calculate transcript
+        let transcript = Self::_compute_recursive_challenges(
             proof,
         )?;
-        // Calculate base commitment keys
-        let (ck_a_base, ck_b_base) = Self::_compute_final_commitment_keys(ck, &transcript)?;
-        // Verify base commitment
-        Self::_verify_base_commitment(
-            (&ck_a_base, &ck_b_base, &vec![ck.2.clone()]),
-            base_com,
-            proof,
-        )
+
+        let round = transcript.len();
+        let mut c_prime : IP::Output;
+        let mut d1_prime : IP::Output;
+        let mut d2_prime : IP::Output;
+
+        let mut c = IP::Output.from;
+        let mut d1 = com.0;
+        let mut d2 = com.1;
+
+        for i in 0..round {
+            // Verifier's work in reduce
+            let last_commitment = proof.r_commitment_steps.pop().unwrap();
+            let last_transcript = transcript.pop().unwrap();
+            c_prime = IP::Output.from(c) + srs.kai.pop().unwrap() + mul_helper(d2, &(last_transcript.2)) + mul_helper(d1, &(last_transcript.3)) + mul_helper(&(last_commitment.0.2), &(last_transcript.0)) + mul_helper(&(last_commitment.1.2), &(last_transcript.1)); 
+            let mut temp = mul_helper(&(srs.delta1_L.pop().unwrap()), &(last_transcript.0));
+            d1_prime = last_commitment.1.0;
+            
+            // Scalar product
+            if i == round-1 {
+
+            }
+        }
+        
+    
+        //     Ok(LMC::verify(&vec![ck_a_base.clone()], &a_base, &com_a)?
+        //         && RMC::verify(&vec![ck_b_base.clone()], &b_base, &com_b)?
+        //         && IPC::verify(&ck_t, &t_base, &com_t)?)
+
+
+        Ok(true)    // temporary return
     }
 
     pub fn prove_with_aux(
@@ -230,14 +322,14 @@ where
                 
                  // Fiat-Shamir challenge
                  let mut counter_nonce: usize = 0;
-                 let default_transcript = (Default::default(),Default::default());
+                 let default_transcript = (Default::default(),Default::default(),Default::default(),Default::default());
                  let transcript = r_transcript.last().unwrap_or(&default_transcript);
                  let (beta, beta_inv) = 'challenge: loop {
                      let mut hash_input = Vec::new();
                      hash_input.extend_from_slice(&counter_nonce.to_be_bytes()[..]);
                      //TODO: Should use CanonicalSerialize instead of ToBytes
                      hash_input.extend_from_slice(&to_bytes![
-                         transcript.0, transcript.1, d1_L, d1_R, d2_L, d2_R
+                         transcript.0, transcript.1, transcript.2, transcript.3, d1_L, d1_R, d2_L, d2_R
                      ]?);
                      let beta: LMC::Scalar = u128::from_be_bytes(
                          D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
@@ -281,7 +373,7 @@ where
                     hash_input.extend_from_slice(&counter_nonce.to_be_bytes()[..]);
                     //TODO: Should use CanonicalSerialize instead of ToBytes
                     hash_input.extend_from_slice(&to_bytes![
-                        transcript.0, transcript.1, c_plus, c_minus
+                        transcript.0, transcript.1, transcript.2, transcript.3, c_plus, c_minus
                     ]?);
                     let alpha: LMC::Scalar = u128::from_be_bytes(
                         D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
@@ -316,7 +408,7 @@ where
                 let com2 = (d1_R, d2_R, c_minus);
 
                 r_commitment_steps.push((com1, com2));
-                r_transcript.push((alpha, beta));
+                r_transcript.push((alpha, alpha_inv, beta, beta_inv));
                 end_timer!(recurse);
             }
         };
@@ -338,102 +430,118 @@ where
 
     // Helper function used to calculate recursive challenges from proof execution (transcript in reverse)
     pub fn verify_recursive_challenge_transcript(
-        com: (&LMC::Output, &RMC::Output, &IPC::Output),
         proof: &DORYProof<IP, LMC, RMC, IPC, D>,
-    ) -> Result<((LMC::Output, RMC::Output, IPC::Output), Vec<LMC::Scalar>), Error> {
-        Self::_compute_recursive_challenges((com.0.clone(), com.1.clone(), com.2.clone()), proof)
+    ) -> Result<Vec<(LMC::Scalar, LMC::Scalar, LMC::Scalar, LMC::Scalar)>, Error> {
+        Self::_compute_recursive_challenges(proof)
     }
 
     fn _compute_recursive_challenges(
-        com: (LMC::Output, RMC::Output, IPC::Output),
         proof: &DORYProof<IP, LMC, RMC, IPC, D>,
-    ) -> Result<((LMC::Output, RMC::Output, IPC::Output), Vec<LMC::Scalar>), Error> {
-        let (mut com_a, mut com_b, mut com_t) = com;
+    ) -> Result<Vec<(LMC::Scalar, LMC::Scalar, LMC::Scalar, LMC::Scalar)>, Error> {
+        // let (mut com1, mut com2) = (proof.r_commitment_steps[0], proof.r_commitment_steps[1]);
+
         let mut r_transcript = Vec::new();
         for (com_1, com_2) in proof.r_commitment_steps.iter().rev() {
-            // Fiat-Shamir challenge
+            // First Fiat-Shamir challenge
             let mut counter_nonce: usize = 0;
-            let default_transcript = Default::default();
+            let default_transcript = (Default::default(), Default::default(),Default::default(),Default::default());
             let transcript = r_transcript.last().unwrap_or(&default_transcript);
-            let (c, c_inv) = 'challenge: loop {
+            let (beta, beta_inv) = 'challenge: loop {
                 let mut hash_input = Vec::new();
                 hash_input.extend_from_slice(&counter_nonce.to_be_bytes()[..]);
                 hash_input.extend_from_slice(&to_bytes![
-                    transcript, com_1.0, com_1.1, com_1.2, com_2.0, com_2.1, com_2.2
+                    transcript.0, transcript.1, transcript.2, transcript.3, com_1.0, com_2.0, com_1.1, com_2.1
                 ]?);
-                let c: LMC::Scalar = u128::from_be_bytes(
+                let beta: LMC::Scalar = u128::from_be_bytes(
                     D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
                 )
                 .into();
-                if let Some(c_inv) = c.inverse() {
+                if let Some(beta_inv) = beta.inverse() {
                     // Optimization for multiexponentiation to rescale G2 elements with 128-bit challenge
                     // Swap 'c' and 'c_inv' since can't control bit size of c_inv
-                    break 'challenge (c_inv, c);
+                    break 'challenge (beta_inv, beta);
                 }
                 counter_nonce += 1;
             };
 
-            com_a = mul_helper(&com_1.0, &c) + com_a.clone() + mul_helper(&com_2.0, &c_inv);
-            com_b = mul_helper(&com_1.1, &c) + com_b.clone() + mul_helper(&com_2.1, &c_inv);
-            com_t = mul_helper(&com_1.2, &c) + com_t.clone() + mul_helper(&com_2.2, &c_inv);
+            // Second Fiat-Shamir challenge
+            let (alpha, alpha_inv) = 'challenge: loop {
+                let mut hash_input = Vec::new();
+                hash_input.extend_from_slice(&counter_nonce.to_be_bytes()[..]);
+                hash_input.extend_from_slice(&to_bytes![
+                    transcript.0, transcript.1, transcript.2, transcript.3, com_1.2, com_2.2
+                ]?);
+                let alpha: LMC::Scalar = u128::from_be_bytes(
+                    D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
+                )
+                .into();
+                if let Some(alpha_inv) = beta.inverse() {
+                    // Optimization for multiexponentiation to rescale G2 elements with 128-bit challenge
+                    // Swap 'c' and 'c_inv' since can't control bit size of c_inv
+                    break 'challenge (alpha_inv, alpha);
+                }
+                counter_nonce += 1;
+            };
 
-            r_transcript.push(c);
+        
+            r_transcript.push((alpha, alpha_inv, beta, beta_inv));
         }
         r_transcript.reverse();
-        Ok(((com_a, com_b, com_t), r_transcript))
+        
+        Ok(r_transcript)
     }
 
-    pub(crate) fn _compute_final_commitment_keys(
-        ck: (&[LMC::Key], &[RMC::Key], &IPC::Key),
-        transcript: &Vec<LMC::Scalar>,
-    ) -> Result<(LMC::Key, RMC::Key), Error> {
-        // Calculate base commitment keys
-        let (ck_a, ck_b, _) = ck;
-        assert!(ck_a.len().is_power_of_two());
+    // pub(crate) fn _compute_final_commitment_keys(
+    //     ck: (&[LMC::Key], &[RMC::Key]),
+    //     transcript: &Vec<LMC::Scalar>,
+    // ) -> Result<(LMC::Key, RMC::Key), Error> {
+    //     // Calculate base commitment keys
+    //     let (ck_a, ck_b) = ck;
+    //     assert!(ck_a.len().is_power_of_two());
 
-        let mut ck_a_agg_challenge_exponents = vec![LMC::Scalar::one()];
-        let mut ck_b_agg_challenge_exponents = vec![LMC::Scalar::one()];
-        for (i, c) in transcript.iter().enumerate() {
-            let c_inv = c.inverse().unwrap();
-            for j in 0..(2_usize).pow(i as u32) {
-                ck_a_agg_challenge_exponents.push(ck_a_agg_challenge_exponents[j] * &c_inv);
-                ck_b_agg_challenge_exponents.push(ck_b_agg_challenge_exponents[j] * c);
-            }
-        }
-        assert_eq!(ck_a_agg_challenge_exponents.len(), ck_a.len());
-        //TODO: Optimization: Use VariableMSM multiexponentiation
-        let ck_a_base_init = mul_helper(&ck_a[0], &ck_a_agg_challenge_exponents[0]);
-        let ck_a_base = ck_a[1..]
-            .iter()
-            .zip(&ck_a_agg_challenge_exponents[1..])
-            .map(|(g, x)| mul_helper(g, &x))
-            .fold(ck_a_base_init, |sum, x| sum + x);
-        //.reduce(|| ck_a_base_init.clone(), |sum, x| sum + x);
-        let ck_b_base_init = mul_helper(&ck_b[0], &ck_b_agg_challenge_exponents[0]);
-        let ck_b_base = ck_b[1..]
-            .iter()
-            .zip(&ck_b_agg_challenge_exponents[1..])
-            .map(|(g, x)| mul_helper(g, &x))
-            .fold(ck_b_base_init, |sum, x| sum + x);
-        //.reduce(|| ck_b_base_init.clone(), |sum, x| sum + x);
-        Ok((ck_a_base, ck_b_base))
-    }
+    //     let mut ck_a_agg_challenge_exponents = vec![LMC::Scalar::one()];
+    //     let mut ck_b_agg_challenge_exponents = vec![LMC::Scalar::one()];
+    //     for (i, c) in transcript.iter().enumerate() {
+    //         let c_inv = c.inverse().unwrap();
+    //         for j in 0..(2_usize).pow(i as u32) {
+    //             ck_a_agg_challenge_exponents.push(ck_a_agg_challenge_exponents[j] * &c_inv);
+    //             ck_b_agg_challenge_exponents.push(ck_b_agg_challenge_exponents[j] * c);
+    //         }
+    //     }
+    //     assert_eq!(ck_a_agg_challenge_exponents.len(), ck_a.len());
+    //     //TODO: Optimization: Use VariableMSM multiexponentiation
+    //     let ck_a_base_init = mul_helper(&ck_a[0], &ck_a_agg_challenge_exponents[0]);
+    //     let ck_a_base = ck_a[1..]
+    //         .iter()
+    //         .zip(&ck_a_agg_challenge_exponents[1..])
+    //         .map(|(g, x)| mul_helper(g, &x))
+    //         .fold(ck_a_base_init, |sum, x| sum + x);
+    //     //.reduce(|| ck_a_base_init.clone(), |sum, x| sum + x);
+    //     let ck_b_base_init = mul_helper(&ck_b[0], &ck_b_agg_challenge_exponents[0]);
+    //     let ck_b_base = ck_b[1..]
+    //         .iter()
+    //         .zip(&ck_b_agg_challenge_exponents[1..])
+    //         .map(|(g, x)| mul_helper(g, &x))
+    //         .fold(ck_b_base_init, |sum, x| sum + x);
+    //     //.reduce(|| ck_b_base_init.clone(), |sum, x| sum + x);
+    //     Ok((ck_a_base, ck_b_base))
+    // }
 
-    pub(crate) fn _verify_base_commitment(
-        base_ck: (&LMC::Key, &RMC::Key, &Vec<IPC::Key>),
-        base_com: (LMC::Output, RMC::Output, IPC::Output),
-        proof: &DORYProof<IP, LMC, RMC, IPC, D>,
-    ) -> Result<bool, Error> {
-        let (com_a, com_b, com_t) = base_com;
-        let (ck_a_base, ck_b_base, ck_t) = base_ck;
-        let a_base = vec![proof.r_base.0.clone()];
-        let b_base = vec![proof.r_base.1.clone()];
-        let t_base = vec![IP::inner_product(&a_base, &b_base)?];
+    // pub(crate) fn _verify_base_commitment(
+    //     base_ck: (&LMC::Key, &RMC::Key, &Vec<IPC::Key>),
+    //     base_com: (LMC::Output, RMC::Output, IPC::Output),
+    //     proof: &DORYProof<IP, LMC, RMC, IPC, D>,
+    // ) -> Result<bool, Error> {
+    //     let (com_a, com_b, com_t) = base_com;
+    //     let (ck_a_base, ck_b_base, ck_t) = base_ck;
+    //     let a_base = vec![proof.r_base.0.clone()];
+    //     let b_base = vec![proof.r_base.1.clone()];
+    //     let t_base = vec![IP::inner_product(&a_base, &b_base)?];
 
-        Ok(LMC::verify(&vec![ck_a_base.clone()], &a_base, &com_a)?
-            && RMC::verify(&vec![ck_b_base.clone()], &b_base, &com_b)?
-            && IPC::verify(&ck_t, &t_base, &com_t)?)
-    }
+    //     Ok(LMC::verify(&vec![ck_a_base.clone()], &a_base, &com_a)?
+    //         && RMC::verify(&vec![ck_b_base.clone()], &b_base, &com_b)?
+    //         && IPC::verify(&ck_t, &t_base, &com_t)?)
+    // }
 }
 
 impl<IP, LMC, RMC, IPC, D> Clone for DORYProof<IP, LMC, RMC, IPC, D>
@@ -463,122 +571,123 @@ where
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ark_bls12_381::Bls12_381;
-    use ark_ec::PairingEngine;
-    use ark_ff::UniformRand;
-    use ark_std::rand::{rngs::StdRng, SeedableRng};
-    use blake2::Blake2b;
 
-    use ark_dh_commitments::{
-        afgho16::{AFGHOCommitmentG1, AFGHOCommitmentG2},
-        identity::IdentityCommitment,
-        pedersen::PedersenCommitment,
-        random_generators,
-    };
-    use ark_inner_products::{
-        ExtensionFieldElement, InnerProduct, MultiexponentiationInnerProduct, PairingInnerProduct,
-        ScalarInnerProduct,
-    };
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use ark_bls12_381::Bls12_381;
+//     use ark_ec::PairingEngine;
+//     use ark_ff::UniformRand;
+//     use ark_std::rand::{rngs::StdRng, SeedableRng};
+//     use blake2::Blake2b;
 
-    type GC1 = AFGHOCommitmentG1<Bls12_381>;
-    type GC2 = AFGHOCommitmentG2<Bls12_381>;
-    type SC1 = PedersenCommitment<<Bls12_381 as PairingEngine>::G1Projective>;
-    type SC2 = PedersenCommitment<<Bls12_381 as PairingEngine>::G2Projective>;
-    const TEST_SIZE: usize = 8;
+//     use ark_dh_commitments::{
+//         afgho16::{AFGHOCommitmentG1, AFGHOCommitmentG2},
+//         identity::IdentityCommitment,
+//         pedersen::PedersenCommitment,
+//         random_generators,
+//     };
+//     use ark_inner_products::{
+//         ExtensionFieldElement, InnerProduct, MultiexponentiationInnerProduct, PairingInnerProduct,
+//         ScalarInnerProduct,
+//     };
 
-    #[test]
-    fn pairing_inner_product_test() {
-        type IP = PairingInnerProduct<Bls12_381>;
-        type IPC =
-            IdentityCommitment<ExtensionFieldElement<Bls12_381>, <Bls12_381 as PairingEngine>::Fr>;
-        type PairingDORY = DORY<IP, GC1, GC2, IPC, Blake2b>;
+//     type GC1 = AFGHOCommitmentG1<Bls12_381>;
+//     type GC2 = AFGHOCommitmentG2<Bls12_381>;
+//     type SC1 = PedersenCommitment<<Bls12_381 as PairingEngine>::G1Projective>;
+//     type SC2 = PedersenCommitment<<Bls12_381 as PairingEngine>::G2Projective>;
+//     const TEST_SIZE: usize = 8;
 
-        let mut rng = StdRng::seed_from_u64(0u64);
-        let (ck_a, ck_b, ck_t) = PairingDORY::setup(&mut rng, TEST_SIZE).unwrap();
-        let m_a = random_generators(&mut rng, TEST_SIZE);
-        let m_b = random_generators(&mut rng, TEST_SIZE);
-        let com_a = GC1::commit(&ck_a, &m_a).unwrap();
-        let com_b = GC2::commit(&ck_b, &m_b).unwrap();
-        let t = vec![IP::inner_product(&m_a, &m_b).unwrap()];
-        let com_t = IPC::commit(&vec![ck_t.clone()], &t).unwrap();
+//     #[test]
+//     fn pairing_inner_product_test() {
+//         type IP = PairingInnerProduct<Bls12_381>;
+//         type IPC =
+//             IdentityCommitment<ExtensionFieldElement<Bls12_381>, <Bls12_381 as PairingEngine>::Fr>;
+//         type PairingDORY = DORY<IP, GC1, GC2, IPC, Blake2b>;
 
-        let proof = PairingDORY::prove(
-            (&m_a, &m_b, &t[0]),
-            (&ck_a, &ck_b, &ck_t),
-            (&com_a, &com_b, &com_t),
-        )
-        .unwrap();
+//         let mut rng = StdRng::seed_from_u64(0u64);
+//         let (ck_a, ck_b, ck_t) = PairingDORY::setup(&mut rng, TEST_SIZE).unwrap();
+//         let m_a = random_generators(&mut rng, TEST_SIZE);
+//         let m_b = random_generators(&mut rng, TEST_SIZE);
+//         let com_a = GC1::commit(&ck_a, &m_a).unwrap();
+//         let com_b = GC2::commit(&ck_b, &m_b).unwrap();
+//         let t = vec![IP::inner_product(&m_a, &m_b).unwrap()];
+//         let com_t = IPC::commit(&vec![ck_t.clone()], &t).unwrap();
 
-        assert!(
-            PairingDORY::verify((&ck_a, &ck_b, &ck_t), (&com_a, &com_b, &com_t), &proof,).unwrap()
-        );
-    }
+//         let proof = PairingDORY::prove(
+//             (&m_a, &m_b, &t[0]),
+//             (&ck_a, &ck_b, &ck_t),
+//             (&com_a, &com_b, &com_t),
+//         )
+//         .unwrap();
 
-    #[test]
-    fn multiexponentiation_inner_product_test() {
-        type IP = MultiexponentiationInnerProduct<<Bls12_381 as PairingEngine>::G1Projective>;
-        type IPC = IdentityCommitment<
-            <Bls12_381 as PairingEngine>::G1Projective,
-            <Bls12_381 as PairingEngine>::Fr,
-        >;
-        type MultiExpDORY = DORY<IP, GC1, SC1, IPC, Blake2b>;
+//         assert!(
+//             PairingDORY::verify((&ck_a, &ck_b, &ck_t), (&com_a, &com_b, &com_t), &proof,).unwrap()
+//         );
+//     }
 
-        let mut rng = StdRng::seed_from_u64(0u64);
-        let (ck_a, ck_b, ck_t) = MultiExpDORY::setup(&mut rng, TEST_SIZE).unwrap();
-        let m_a = random_generators(&mut rng, TEST_SIZE);
-        let mut m_b = Vec::new();
-        for _ in 0..TEST_SIZE {
-            m_b.push(<Bls12_381 as PairingEngine>::Fr::rand(&mut rng));
-        }
-        let com_a = GC1::commit(&ck_a, &m_a).unwrap();
-        let com_b = SC1::commit(&ck_b, &m_b).unwrap();
-        let t = vec![IP::inner_product(&m_a, &m_b).unwrap()];
-        let com_t = IPC::commit(&vec![ck_t.clone()], &t).unwrap();
+//     #[test]
+//     fn multiexponentiation_inner_product_test() {
+//         type IP = MultiexponentiationInnerProduct<<Bls12_381 as PairingEngine>::G1Projective>;
+//         type IPC = IdentityCommitment<
+//             <Bls12_381 as PairingEngine>::G1Projective,
+//             <Bls12_381 as PairingEngine>::Fr,
+//         >;
+//         type MultiExpDORY = DORY<IP, GC1, SC1, IPC, Blake2b>;
 
-        let proof = MultiExpDORY::prove(
-            (&m_a, &m_b, &t[0]),
-            (&ck_a, &ck_b, &ck_t),
-            (&com_a, &com_b, &com_t),
-        )
-        .unwrap();
+//         let mut rng = StdRng::seed_from_u64(0u64);
+//         let (ck_a, ck_b, ck_t) = MultiExpDORY::setup(&mut rng, TEST_SIZE).unwrap();
+//         let m_a = random_generators(&mut rng, TEST_SIZE);
+//         let mut m_b = Vec::new();
+//         for _ in 0..TEST_SIZE {
+//             m_b.push(<Bls12_381 as PairingEngine>::Fr::rand(&mut rng));
+//         }
+//         let com_a = GC1::commit(&ck_a, &m_a).unwrap();
+//         let com_b = SC1::commit(&ck_b, &m_b).unwrap();
+//         let t = vec![IP::inner_product(&m_a, &m_b).unwrap()];
+//         let com_t = IPC::commit(&vec![ck_t.clone()], &t).unwrap();
 
-        assert!(
-            MultiExpDORY::verify((&ck_a, &ck_b, &ck_t), (&com_a, &com_b, &com_t), &proof,).unwrap()
-        );
-    }
+//         let proof = MultiExpDORY::prove(
+//             (&m_a, &m_b, &t[0]),
+//             (&ck_a, &ck_b, &ck_t),
+//             (&com_a, &com_b, &com_t),
+//         )
+//         .unwrap();
 
-    #[test]
-    fn scalar_inner_product_test() {
-        type IP = ScalarInnerProduct<<Bls12_381 as PairingEngine>::Fr>;
-        type IPC =
-            IdentityCommitment<<Bls12_381 as PairingEngine>::Fr, <Bls12_381 as PairingEngine>::Fr>;
-        type ScalarDORY = DORY<IP, SC2, SC2, IPC, Blake2b>;
+//         assert!(
+//             MultiExpDORY::verify((&ck_a, &ck_b, &ck_t), (&com_a, &com_b, &com_t), &proof,).unwrap()
+//         );
+//     }
 
-        let mut rng = StdRng::seed_from_u64(0u64);
-        let (ck_a, ck_b, ck_t) = ScalarDORY::setup(&mut rng, TEST_SIZE).unwrap();
-        let mut m_a = Vec::new();
-        let mut m_b = Vec::new();
-        for _ in 0..TEST_SIZE {
-            m_a.push(<Bls12_381 as PairingEngine>::Fr::rand(&mut rng));
-            m_b.push(<Bls12_381 as PairingEngine>::Fr::rand(&mut rng));
-        }
-        let com_a = SC2::commit(&ck_a, &m_a).unwrap();
-        let com_b = SC2::commit(&ck_b, &m_b).unwrap();
-        let t = vec![IP::inner_product(&m_a, &m_b).unwrap()];
-        let com_t = IPC::commit(&vec![ck_t.clone()], &t).unwrap();
+//     #[test]
+//     fn scalar_inner_product_test() {
+//         type IP = ScalarInnerProduct<<Bls12_381 as PairingEngine>::Fr>;
+//         type IPC =
+//             IdentityCommitment<<Bls12_381 as PairingEngine>::Fr, <Bls12_381 as PairingEngine>::Fr>;
+//         type ScalarDORY = DORY<IP, SC2, SC2, IPC, Blake2b>;
 
-        let proof = ScalarDORY::prove(
-            (&m_a, &m_b, &t[0]),
-            (&ck_a, &ck_b, &ck_t),
-            (&com_a, &com_b, &com_t),
-        )
-        .unwrap();
+//         let mut rng = StdRng::seed_from_u64(0u64);
+//         let (ck_a, ck_b, ck_t) = ScalarDORY::setup(&mut rng, TEST_SIZE).unwrap();
+//         let mut m_a = Vec::new();
+//         let mut m_b = Vec::new();
+//         for _ in 0..TEST_SIZE {
+//             m_a.push(<Bls12_381 as PairingEngine>::Fr::rand(&mut rng));
+//             m_b.push(<Bls12_381 as PairingEngine>::Fr::rand(&mut rng));
+//         }
+//         let com_a = SC2::commit(&ck_a, &m_a).unwrap();
+//         let com_b = SC2::commit(&ck_b, &m_b).unwrap();
+//         let t = vec![IP::inner_product(&m_a, &m_b).unwrap()];
+//         let com_t = IPC::commit(&vec![ck_t.clone()], &t).unwrap();
 
-        assert!(
-            ScalarDORY::verify((&ck_a, &ck_b, &ck_t), (&com_a, &com_b, &com_t), &proof,).unwrap()
-        );
-    }
-}
+//         let proof = ScalarDORY::prove(
+//             (&m_a, &m_b, &t[0]),
+//             (&ck_a, &ck_b, &ck_t),
+//             (&com_a, &com_b, &com_t),
+//         )
+//         .unwrap();
+
+//         assert!(
+//             ScalarDORY::verify((&ck_a, &ck_b, &ck_t), (&com_a, &com_b, &com_t), &proof,).unwrap()
+//         );
+//     }
+// }

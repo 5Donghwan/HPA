@@ -60,6 +60,7 @@ where
     let com_r = RMC::commit(&ck_r, &r).unwrap();
     let t = vec![IP::inner_product(&l, &r).unwrap()];
     let com_t = IPC::commit(&vec![ck_t.clone()], &t).unwrap();
+    //precompute
     let mut start = Instant::now();
     let proof =
         TIPA2::<IP, LMC, RMC, IPC, P, D>::prove(&srs, (&l, &r), (&ck_l, &ck_r, &ck_t)).unwrap();
