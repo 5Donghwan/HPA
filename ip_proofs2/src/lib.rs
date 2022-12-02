@@ -19,6 +19,7 @@ pub(crate) fn mul_helper<T: MulAssign<F> + Clone, F: Clone>(t: &T, f: &F) -> T {
     clone
 }
 
+//TODO: helper function for mul because relying on MulAssign
 pub(crate) fn add_helper<T: AddAssign<F> + Clone, F: Clone>(t: &T, f: &F) -> T {
     let mut clone = t.clone();
     clone.add_assign(f.clone());

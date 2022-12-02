@@ -1,11 +1,11 @@
-use ark_ff::{to_bytes, Field, One};
+use ark_ff::{to_bytes, Field};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 use ark_std::rand::Rng;
 use ark_std::{end_timer, start_timer};
 use digest::Digest;
-use std::{convert::TryInto, marker::PhantomData, ops::MulAssign};
+use std::{convert::TryInto, marker::PhantomData, ops::MulAssign, ops::AddAssign};
 
-use crate::{mul_helper, Error, InnerProductArgumentError};
+use crate::{mul_helper, add_helper, Error, InnerProductArgumentError};
 use ark_dh_commitments::DoublyHomomorphicCommitment;
 use ark_inner_products::InnerProduct;
 use ark_std::cfg_iter;
@@ -44,6 +44,8 @@ where
         (LMC::Output, RMC::Output, IPC::Message), 
         (LMC::Output, RMC::Output, IPC::Message),
     )>,
+    pub(crate) e1: Vec<IP::LeftMessage>,
+    pub(crate) e2: Vec<IP::RightMessage>,
     // pub(crate) r_base: (LMC::Message, RMC::Message),
     _dory: PhantomData<DORY<IP, LMC, RMC, IPC, D>>,
 }
@@ -120,6 +122,10 @@ where
     IPC::Key: MulAssign<LMC::Scalar>,
     RMC::Output: MulAssign<LMC::Scalar>,
     IPC::Output: MulAssign<LMC::Scalar>,
+    LMC::Output: MulAssign<LMC::Scalar>,
+    IPC::Message: AddAssign<LMC::Output>,
+    IPC::Message: AddAssign<RMC::Output>,
+    RMC::Output: AddAssign<LMC::Output>,
 {
     pub fn setup<R: Rng>(
         rng: &mut R,
@@ -207,6 +213,7 @@ where
         ck: (&[LMC::Key], &[RMC::Key]),
         com: (&LMC::Output, &RMC::Output, &IP::Output), // com ( d1, d2, c )
         proof: &DORYProof<IP, LMC, RMC, IPC, D>,
+        values: (Vec<IP::LeftMessage>, Vec<IP::RightMessage>),
     ) -> Result<bool, Error> {
         if ck.0.len().count_ones() != 1 || ck.0.len() != ck.1.len() {
             // Power of 2 length
@@ -225,31 +232,57 @@ where
         let mut d1_prime : IP::Output;
         let mut d2_prime : IP::Output;
 
-        let mut c = IP::Output.from;
+        let mut c = com.2;
         let mut d1 = com.0;
         let mut d2 = com.1;
-
+        let mut result;
         for i in 0..round {
             // Verifier's work in reduce
             let last_commitment = proof.r_commitment_steps.pop().unwrap();
             let last_transcript = transcript.pop().unwrap();
-            c_prime = IP::Output.from(c) + srs.kai.pop().unwrap() + mul_helper(d2, &(last_transcript.2)) + mul_helper(d1, &(last_transcript.3)) + mul_helper(&(last_commitment.0.2), &(last_transcript.0)) + mul_helper(&(last_commitment.1.2), &(last_transcript.1)); 
-            let mut temp = mul_helper(&(srs.delta1_L.pop().unwrap()), &(last_transcript.0));
-            d1_prime = last_commitment.1.0;
-            
+            let mut temp2 = mul_helper(d1, &(last_transcript.3));
+            let mut temp = mul_helper(d2, &(last_transcript.2));
+            let mut temp = add_helper(&temp, &temp2);
+            let mut temp = add_helper(&srs.kai.pop().unwrap(), &temp);
+            c_prime = *c + srs.kai.pop().unwrap() + temp + mul_helper(&(last_commitment.0.2), &(last_transcript.0)) + mul_helper(&(last_commitment.1.2), &(last_transcript.1)); 
+            let mut temp = mul_helper(&(last_commitment.0.0), &(last_transcript.0)) + last_commitment.1.0;
+            d1_prime = mul_helper(&(srs.delta1_L.pop().unwrap()), &(last_transcript.0 * last_transcript.2)) + mul_helper(&(srs.delta1_R.pop().unwrap()), &(last_transcript.2));
+            d1_prime = add_helper(&d1_prime, &temp);
+            let mut temp2 =  mul_helper(&(last_commitment.0.1), &(last_transcript.1)) + last_commitment.1.1;
+            d2_prime = mul_helper(&(srs.delta2_L.pop().unwrap()), &(last_transcript.1 * last_transcript.3)) + mul_helper(&(srs.delta2_R.pop().unwrap()), &(last_transcript.3));
+            d2_prime = add_helper(&(d2_prime), &(temp2));
+
             // Scalar product
             if i == round-1 {
+                let e1 = proof.e1;
+                let e2 = proof.e2;
 
+                // Fiat-Schamir challenge
+                let (d, d_inv) = 'challenge: loop {
+                    let mut hash_input = Vec::new();
+                    //TODO: Should use CanonicalSerialize instead of ToBytes
+                    hash_input.extend_from_slice(&to_bytes![
+                        e1,e2
+                    ]?);
+                    let d: LMC::Scalar = u128::from_be_bytes(
+                        D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
+                    )
+                    .into();
+                    if let Some(d_inv) = d.inverse() {
+                        // Optimization for multiexponentiation to rescale G2 elements with 128-bit challenge
+                        // Swap 'c' and 'c_inv' since can't control bit size of c_inv
+                        break 'challenge (d_inv, d);
+                    }
+                };
+
+                // check pairing equation
+                let left = IP::inner_product(&e1, &e2)?;
+                let temp = add_helper( &mul_helper(com.1, &d), &mul_helper(com.0, &d_inv));
+                let right = add_helper(com.2, &temp);
+                result = left == right;
             }
         }
-        
-    
-        //     Ok(LMC::verify(&vec![ck_a_base.clone()], &a_base, &com_a)?
-        //         && RMC::verify(&vec![ck_b_base.clone()], &b_base, &com_b)?
-        //         && IPC::verify(&ck_t, &t_base, &com_t)?)
-
-
-        Ok(true)    // temporary return
+        Ok(result)
     }
 
     pub fn prove_with_aux(
@@ -417,6 +450,8 @@ where
         Ok((
             DORYProof {
                 r_commitment_steps,
+                e1: v1,
+                e2: v2,
                 // r_base: m_base,
                 _dory: PhantomData,
             },
@@ -565,6 +600,8 @@ where
     fn clone(&self) -> Self {
         DORYProof {
             r_commitment_steps: self.r_commitment_steps.clone(),
+            e1: self.e1.clone(),
+            e2: self.e2.clone(),
             // r_base: self.r_base.clone(),
             _dory: PhantomData,
         }
