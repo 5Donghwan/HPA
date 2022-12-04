@@ -1,5 +1,5 @@
 [package]
-name = "ark-ip-proofs2"
+name = "ark-dory"
 version = "0.3.0"
 authors = [
     "Benedikt Bünz",
@@ -7,11 +7,8 @@ authors = [
     "Pratyush Mishra",
     "Nirvan Tyagi",
     "Psi Vesely",
+    "Hankyung Ko",
 ]
-edition = "2018"
-homepage = "https://github.com/arkworks-rs/ripp"
-repository = "https://github.com/arkworks-rs/ripp"
-documentation = "https://docs.rs/ark-ip-proofs/"
 
 [dependencies]
 ark-ec = "0.3"

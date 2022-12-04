@@ -6,9 +6,7 @@ use std::{
     ops::AddAssign,
 };
 
-pub mod applications;
 pub mod dory;
-pub mod tipa;
 
 pub type Error = Box<dyn ErrorTrait>;
 

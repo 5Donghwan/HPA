@@ -7,7 +7,7 @@ use std::{
     fmt::{Display, Formatter, Result as FmtResult},
     io::{Result as IoResult, Write},
     marker::PhantomData,
-    ops::{Add, Mul, MulAssign},
+    ops::{Add, Mul, MulAssign, AddAssign},
 };
 
 #[cfg(feature = "parallel")]
@@ -153,6 +153,12 @@ impl<P: PairingEngine> Eq for ExtensionFieldElement<P> {}
 impl<P: PairingEngine> MulAssign<P::Fr> for ExtensionFieldElement<P> {
     fn mul_assign(&mut self, rhs: P::Fr) {
         *self = ExtensionFieldElement(self.0.pow(rhs.into_repr()))
+    }
+}
+
+impl<P: PairingEngine> AddAssign<Self> for ExtensionFieldElement<P> {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = ExtensionFieldElement(<P::Fqk as Mul>::mul(self.0, rhs.0))
     }
 }
 

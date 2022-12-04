@@ -27,7 +27,7 @@ csv = "1"
 
 ark-inner-products = { path = "../inner_products" }
 ark-ip-proofs = { path = "../ip_proofs" }
-ark-ip-proofs2 = { path = "../ip_proofs2" }
+ark-dory = { path = "../dory" }
 ark-dh-commitments = { path = "../dh_commitments" }
 
 [[bench]]

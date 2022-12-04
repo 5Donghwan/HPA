@@ -10,15 +10,15 @@ use ark_ff::{UniformRand};
 use ark_inner_products::{
     ExtensionFieldElement, InnerProduct, PairingInnerProduct,
 };
-use ark_ip_proofs2::tipa::{
-    TIPACompatibleSetup, TIPA2,
+use ark_dory::dory::{
+    DORY,
 };
 
 use ark_std::rand::{rngs::StdRng, Rng, SeedableRng};
 use blake2::Blake2b;
 use digest::Digest;
 
-use std::{ops::MulAssign, time::Instant};
+use std::{ops::MulAssign, ops::AddAssign, time::Instant};
 
 fn bench_dory<IP, LMC, RMC, IPC, P, D, R: Rng>(rng: &mut R, len: usize)
 where
@@ -29,9 +29,8 @@ where
         RightMessage = RMC::Message,
         Output = IPC::Message,
     >,
-    LMC: DoublyHomomorphicCommitment<Scalar = P::Fr, Key = P::G2Projective> + TIPACompatibleSetup,
-    RMC: DoublyHomomorphicCommitment<Scalar = LMC::Scalar, Key = P::G1Projective>
-        + TIPACompatibleSetup,
+    LMC: DoublyHomomorphicCommitment<Scalar = P::Fr, Key = P::G2Projective, Message = P::G1Projective>,
+    RMC: DoublyHomomorphicCommitment<Scalar = LMC::Scalar, Key = P::G1Projective, Message = P::G2Projective>,
     IPC: DoublyHomomorphicCommitment<Scalar = LMC::Scalar>,
     LMC::Message: MulAssign<P::Fr>,
     RMC::Message: MulAssign<P::Fr>,
@@ -43,6 +42,10 @@ where
     IPC::Output: MulAssign<LMC::Scalar>,
     IP::LeftMessage: UniformRand,
     IP::RightMessage: UniformRand,
+    LMC::Output: MulAssign<LMC::Scalar>,
+    IPC::Message: AddAssign<LMC::Output>,
+    IPC::Message: AddAssign<RMC::Output>,
+    RMC::Output: AddAssign<LMC::Output>,
 {
     let mut l = Vec::new(); 
     let mut r = Vec::new();
@@ -52,25 +55,30 @@ where
         r.push(<IP::RightMessage>::rand(rng));
     }
 
-
-    let (srs, ck_t) = TIPA2::<IP, LMC, RMC, IPC, P, D>::setup(rng, len).unwrap();
-    let (ck_l, ck_r) = srs.get_commitment_keys();
-    let v_srs = srs.get_verifier_key();
-    let com_l = LMC::commit(&ck_l, &l).unwrap();
-    let com_r = RMC::commit(&ck_r, &r).unwrap();
-    let t = vec![IP::inner_product(&l, &r).unwrap()];
-    let com_t = IPC::commit(&vec![ck_t.clone()], &t).unwrap();
-    //precompute
+    let (gamma2, gamma1) = DORY::<IP,LMC,RMC,IPC, D>::setup(rng, len).unwrap();
+    let d1 = LMC::commit(&gamma2, &l).unwrap();
+    let d2 = RMC::commit(&gamma1, &r).unwrap();
+    let c = IP::inner_product(&l, &r).unwrap();
+    /*
+    precompute
+    */
+    let mut dory_srs = DORY::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone()))).unwrap();
     let mut start = Instant::now();
-    let proof =
-        TIPA2::<IP, LMC, RMC, IPC, P, D>::prove(&srs, (&l, &r), (&ck_l, &ck_r, &ck_t)).unwrap();
+    let mut proof =
+        DORY::<IP, LMC, RMC, IPC, D>::prove((&(l.clone()), &(r.clone())),
+         (&(gamma1.clone()), &(gamma2.clone())), 
+         (&(gamma1.clone()), &(gamma2.clone())), 
+         (&(d1.clone()), &(d2.clone()), &(c.clone()))
+        ).unwrap();
     let mut bench = start.elapsed().as_millis();
     println!("\t proving time: {} ms", bench);
     start = Instant::now();
-    TIPA2::<IP, LMC, RMC, IPC, P, D>::verify(&v_srs, &ck_t, (&com_l, &com_r, &com_t), &proof)
+    let result = DORY::<IP, LMC, RMC, IPC, D>::verify(&mut dory_srs, (&(gamma2.clone()), &(gamma1.clone())),
+         (&(d1.clone()), &(d2.clone()), &(c.clone())), &mut proof)
         .unwrap();
     bench = start.elapsed().as_millis();
     println!("\t verification time: {} ms", bench);
+    println!("result : {}", result);
 }
 
 
