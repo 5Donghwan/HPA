@@ -16,9 +16,31 @@ extern crate ark_inner_products;
 use self::ark_inner_products::InnerProduct;
 use self::ark_std::cfg_iter;
 
+use std::fmt;
+
 #[cfg(feature = "parallel")]
 extern crate rayon;
 use self::rayon::prelude::*;
+
+struct List(Vec<u8>);
+impl fmt::Display for List {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Extract the value using tuple indexing,
+        // and create a reference to 'vec'.
+        let vec = &self.0;
+        write!(f, "[")?;
+        // Iterate over 'v' in 'vec' while enumerating the iteration
+        // count in 'count'.
+        for (count, v) in vec.iter().enumerate() {
+            // For every element except the first, add a comma.
+            // Use the ? operator to return on errors.
+            if count != 0 { write!(f, ", ")?; }
+            write!(f, "{}", v)?;
+        }
+        // Close the opened bracket and return a fmt::Result value.
+        write!(f, "]")
+    }
+}
 
 pub struct DORY<IP, LMC, RMC, IPC, D> {
     _inner_product: PhantomData<IP>,
@@ -126,6 +148,7 @@ where
     RMC::Message: MulAssign<LMC::Scalar>,
     IPC::Message: MulAssign<LMC::Scalar>,
     RMC::Key: MulAssign<LMC::Scalar>,
+    LMC::Key: MulAssign<LMC::Scalar>,
     IPC::Key: MulAssign<LMC::Scalar>,
     RMC::Output: MulAssign<LMC::Scalar>,
     IPC::Output: MulAssign<LMC::Scalar>,
@@ -216,15 +239,16 @@ where
 
     pub fn verify(
         srs: &mut DORYSRS<IP, LMC, RMC, IPC, D>,  //
-        ck: (&[LMC::Key], &[RMC::Key]),
+        // ck: (&[LMC::Key], &[RMC::Key]),
+        ck_message: (&[LMC::Message], &[RMC::Message]),
         com: (&LMC::Output, &RMC::Output, &IP::Output), // com ( d1, d2, c )
         proof: &mut DORYProof<IP, LMC, RMC, IPC, D>,
     ) -> Result<bool, Error> {
-        if ck.0.len().count_ones() != 1 || ck.0.len() != ck.1.len() {
+        if ck_message.0.len().count_ones() != 1 || ck_message.0.len() != ck_message.1.len() {
             // Power of 2 length
             return Err(Box::new(InnerProductArgumentError::MessageLengthInvalid(
-                ck.0.len(),
-                ck.1.len(),
+                ck_message.0.len(),
+                ck_message.1.len(),
             )));
         }
         // Calculate transcript
@@ -232,16 +256,22 @@ where
             proof,
         )?;
 
+        let gamma1 = ck_message.0.clone();
+        let gamma2 = ck_message.1.clone();
+
         let round = transcript.len();
         let mut c_prime : IP::Output;
         let mut d1_prime : IP::Output;
         let mut d2_prime : IP::Output;
+
+        println!("round : {}", round);
 
         let c = com.2;
         let d1 = com.0;
         let d2 = com.1;
         let mut result = false;
         for i in 0..round {
+            println!("check");
             // Verifier's work in reduce
             let last_commitment = proof.r_commitment_steps.pop().unwrap();
             let last_transcript = transcript.pop().unwrap();
@@ -260,8 +290,8 @@ where
 
             // Scalar product
             if i == round-1 {
-                let e1 = &proof.e1;
-                let e2 = &proof.e2;
+                let mut e1 = proof.e1.clone();
+                let mut e2 = proof.e2.clone();
 
 
                 // Fiat-Schamir challenge
@@ -269,7 +299,7 @@ where
                     let mut hash_input = Vec::new();
                     //TODO: Should use CanonicalSerialize instead of ToBytes
                     hash_input.extend_from_slice(&to_bytes![
-                        e1,e2
+                        e1[0],e2[0]
                     ]?);
                     let d:LMC::Scalar = u128::from_be_bytes(
                         D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
@@ -283,6 +313,9 @@ where
                 };
 
                 // check pairing equation
+                let temp3 = mul_helper(&(gamma1[0]), &d);
+                e1[0] = e1[0].clone() + temp3;
+                e2[0] = e2[0].clone() + mul_helper(&(gamma2[0]), &(d_inv));
                 let left = IP::inner_product(&e1, &e2)?;
                 let temp1 = c_prime + last_kai;
                 let temp2 = mul_helper(&d2_prime, &d) + mul_helper(&d1_prime, &d_inv);
@@ -366,19 +399,23 @@ where
                 
                  // Fiat-Shamir challenge
                  let mut counter_nonce: usize = 0;
-                 let default_transcript = (Default::default(),Default::default(),Default::default(),Default::default());
-                 let transcript = r_transcript.last().unwrap_or(&default_transcript);
+                //  let default_transcript = (Default::default(),Default::default(),Default::default(),Default::default());
+                //  let transcript = r_transcript.last().unwrap_or(&default_transcript);
                  let (beta, beta_inv) = 'challenge: loop {
                      let mut hash_input = Vec::new();
                      hash_input.extend_from_slice(&counter_nonce.to_be_bytes()[..]);
                      //TODO: Should use CanonicalSerialize instead of ToBytes
                      hash_input.extend_from_slice(&to_bytes![
-                         transcript.0, transcript.1, transcript.2, transcript.3, d1_l, d1_r, d2_l, d2_r
+                        d1_l, d1_r, d2_l, d2_r
                      ]?);
                      let beta: LMC::Scalar = u128::from_be_bytes(
                          D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
                      )
                      .into();
+
+                    //  let list_beta_input = List(hash_input.clone());
+                    //  println!("prove - hash beta - {}", list_beta_input);
+
                      if let Some(beta_inv) = beta.inverse() {
                          // Optimization for multiexponentiation to rescale G2 elements with 128-bit challenge
                          // Swap 'c' and 'c_inv' since can't control bit size of c_inv
@@ -417,12 +454,16 @@ where
                     hash_input.extend_from_slice(&counter_nonce.to_be_bytes()[..]);
                     //TODO: Should use CanonicalSerialize instead of ToBytes
                     hash_input.extend_from_slice(&to_bytes![
-                        transcript.0, transcript.1, transcript.2, transcript.3, c_plus, c_minus
+                        c_plus, c_minus
                     ]?);
                     let alpha: LMC::Scalar = u128::from_be_bytes(
                         D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
                     )
                     .into();
+
+                    // let list_alpha_input = List(hash_input.clone());
+                    //  println!("prove - hash alpha - {}", list_alpha_input);
+
                     if let Some(alpha_inv) = alpha.inverse() {
                         // Optimization for multiexponentiation to rescale G2 elements with 128-bit challenge
                         // Swap 'c' and 'c_inv' since can't control bit size of c_inv
@@ -492,18 +533,22 @@ where
         for (com_1, com_2) in proof.r_commitment_steps.iter().rev() {
             // First Fiat-Shamir challenge
             let mut counter_nonce: usize = 0;
-            let default_transcript = (Default::default(), Default::default(),Default::default(),Default::default());
-            let transcript = r_transcript.last().unwrap_or(&default_transcript);
+            // let default_transcript = (Default::default(), Default::default(),Default::default(),Default::default());
+            // let transcript = r_transcript.last().unwrap_or(&default_transcript);
             let (beta, beta_inv) = 'challenge: loop {
                 let mut hash_input = Vec::new();
                 hash_input.extend_from_slice(&counter_nonce.to_be_bytes()[..]);
                 hash_input.extend_from_slice(&to_bytes![
-                    transcript.0, transcript.1, transcript.2, transcript.3, com_1.0, com_2.0, com_1.1, com_2.1
+                    com_1.0, com_2.0, com_1.1, com_2.1
                 ]?);
                 let beta: LMC::Scalar = u128::from_be_bytes(
                     D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
                 )
                 .into();
+
+                // let list_beta_input = List(hash_input.clone());
+                // println!("prove - hash beta - {}", list_beta_input);
+
                 if let Some(beta_inv) = beta.inverse() {
                     // Optimization for multiexponentiation to rescale G2 elements with 128-bit challenge
                     // Swap 'c' and 'c_inv' since can't control bit size of c_inv
@@ -517,12 +562,16 @@ where
                 let mut hash_input = Vec::new();
                 hash_input.extend_from_slice(&counter_nonce.to_be_bytes()[..]);
                 hash_input.extend_from_slice(&to_bytes![
-                    transcript.0, transcript.1, transcript.2, transcript.3, com_1.2, com_2.2
+                    com_1.2, com_2.2
                 ]?);
                 let alpha: LMC::Scalar = u128::from_be_bytes(
                     D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
                 )
                 .into();
+
+                // let list_alpha_input = List(hash_input.clone());
+                // println!("prove - hash alpha - {}", list_alpha_input);
+
                 if let Some(alpha_inv) = beta.inverse() {
                     // Optimization for multiexponentiation to rescale G2 elements with 128-bit challenge
                     // Swap 'c' and 'c_inv' since can't control bit size of c_inv

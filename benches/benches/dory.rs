@@ -73,7 +73,7 @@ where
     let mut bench = start.elapsed().as_millis();
     println!("\t proving time: {} ms", bench);
     start = Instant::now();
-    let result = DORY::<IP, LMC, RMC, IPC, D>::verify(&mut dory_srs, (&(gamma2.clone()), &(gamma1.clone())),
+    let result = DORY::<IP, LMC, RMC, IPC, D>::verify(&mut dory_srs, (&(gamma1.clone()), &(gamma2.clone())),
          (&(d1.clone()), &(d2.clone()), &(c.clone())), &mut proof)
         .unwrap();
     bench = start.elapsed().as_millis();
@@ -83,7 +83,7 @@ where
 
 
 fn main() {
-    const LEN: usize = 16;
+    const LEN: usize = 4;
     type GC1 = AFGHOCommitmentG1<Bls12_381>;
     type GC2 = AFGHOCommitmentG2<Bls12_381>;
     let mut rng = StdRng::seed_from_u64(0u64);
