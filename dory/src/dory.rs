@@ -154,6 +154,7 @@ where
     IPC::Output: MulAssign<LMC::Scalar>,
     LMC::Output: MulAssign<LMC::Scalar>,
     IPC::Message: AddAssign<LMC::Output>,
+    // IPC::Message: AddAssign<IPC::Message>,
     IPC::Message: AddAssign<RMC::Output>,
     RMC::Output: AddAssign<LMC::Output>,
 {
@@ -265,65 +266,110 @@ where
         let mut d2_prime : IP::Output;
 
         println!("round : {}", round);
+        println!("kai len : {}", srs.kai.len());
 
         let c = com.2;
         let d1 = com.0;
         let d2 = com.1;
         let mut result = false;
-        for i in 0..round {
-            println!("check");
-            // Verifier's work in reduce
-            let last_commitment = proof.r_commitment_steps.pop().unwrap();
-            let last_transcript = transcript.pop().unwrap();
-            let temp2 = mul_helper(d1, &(last_transcript.3));
-            let temp = mul_helper(d2, &(last_transcript.2));
-            let temp = add_helper(&temp, &temp2);
-            let last_kai = srs.kai.pop().unwrap();
-            let temp = add_helper(&last_kai, &temp);
-            c_prime = c.clone() + temp + mul_helper(&(last_commitment.0.2), &(last_transcript.0)) + mul_helper(&(last_commitment.1.2), &(last_transcript.1)); 
-            let temp = mul_helper(&(last_commitment.0.0), &(last_transcript.0)) + last_commitment.1.0;
-            d1_prime = mul_helper(&(srs.delta1_l.pop().unwrap()), &(last_transcript.0 * last_transcript.2)) + mul_helper(&(srs.delta1_r.pop().unwrap()), &(last_transcript.2));
-            d1_prime = add_helper(&d1_prime, &temp);
-            let temp2 =  mul_helper(&(last_commitment.0.1), &(last_transcript.1)) + last_commitment.1.1;
-            d2_prime = mul_helper(&(srs.delta2_l.pop().unwrap()), &(last_transcript.1 * last_transcript.3)) + mul_helper(&(srs.delta2_r.pop().unwrap()), &(last_transcript.3));
-            d2_prime = add_helper(&(d2_prime), &(temp2));
+        if round > 0 {
+            for i in 0..round {
+                println!("check");
+                // Verifier's work in reduce
+                let last_commitment = proof.r_commitment_steps.pop().unwrap();
+                let last_transcript = transcript.pop().unwrap();
+                let temp2 = mul_helper(d1, &(last_transcript.3));
+                let temp = mul_helper(d2, &(last_transcript.2));
+                let temp = add_helper(&temp, &temp2);
+                let last_kai = srs.kai.pop().unwrap();
+                let temp = add_helper(&last_kai, &temp);
+                c_prime = c.clone() + temp + mul_helper(&(last_commitment.0.2), &(last_transcript.0)) + mul_helper(&(last_commitment.1.2), &(last_transcript.1)); 
+                let temp = mul_helper(&(last_commitment.0.0), &(last_transcript.0)) + last_commitment.1.0;
+                d1_prime = mul_helper(&(srs.delta1_l.pop().unwrap()), &(last_transcript.0 * last_transcript.2)) + mul_helper(&(srs.delta1_r.pop().unwrap()), &(last_transcript.2));
+                d1_prime = add_helper(&d1_prime, &temp);
+                let temp2 =  mul_helper(&(last_commitment.0.1), &(last_transcript.1)) + last_commitment.1.1;
+                d2_prime = mul_helper(&(srs.delta2_l.pop().unwrap()), &(last_transcript.1 * last_transcript.3)) + mul_helper(&(srs.delta2_r.pop().unwrap()), &(last_transcript.3));
+                d2_prime = add_helper(&(d2_prime), &(temp2));
 
-            // Scalar product
-            if i == round-1 {
-                let mut e1 = proof.e1.clone();
-                let mut e2 = proof.e2.clone();
+                // Scalar product
+                if i == round-1 {
+                    let mut e1 = proof.e1.clone();
+                    let mut e2 = proof.e2.clone();
 
 
-                // Fiat-Schamir challenge
-                let (d, d_inv) = 'challenge: loop {
-                    let mut hash_input = Vec::new();
-                    //TODO: Should use CanonicalSerialize instead of ToBytes
-                    hash_input.extend_from_slice(&to_bytes![
-                        e1[0],e2[0]
-                    ]?);
-                    let d:LMC::Scalar = u128::from_be_bytes(
-                        D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
-                    )
-                    .into();
-                    if let Some(d_inv) = d.inverse() {
-                        // Optimization for multiexponentiation to rescale G2 elements with 128-bit challenge
-                        // Swap 'c' and 'c_inv' since can't control bit size of c_inv
-                        break 'challenge (d_inv, d);
-                    }
-                };
+                    // Fiat-Schamir challenge
+                    let (d, d_inv) = 'challenge: loop {
+                        let mut hash_input = Vec::new();
+                        //TODO: Should use CanonicalSerialize instead of ToBytes
+                        hash_input.extend_from_slice(&to_bytes![
+                            e1[0],e2[0]
+                        ]?);
+                        let d:LMC::Scalar = u128::from_be_bytes(
+                            D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
+                        )
+                        .into();
+                        if let Some(d_inv) = d.inverse() {
+                            // Optimization for multiexponentiation to rescale G2 elements with 128-bit challenge
+                            // Swap 'c' and 'c_inv' since can't control bit size of c_inv
+                            break 'challenge (d_inv, d);
+                        }
+                    };
 
-                // check pairing equation
-                let temp3 = mul_helper(&(gamma1[0]), &d);
-                e1[0] = e1[0].clone() + temp3;
-                e2[0] = e2[0].clone() + mul_helper(&(gamma2[0]), &(d_inv));
-                let left = IP::inner_product(&e1, &e2)?;
-                let temp1 = c_prime + last_kai;
-                let temp2 = mul_helper(&d2_prime, &d) + mul_helper(&d1_prime, &d_inv);
-                let right = temp1 +temp2;
-                result = left == right;
+                    // check pairing equation
+                    let kai_scalar = IP::inner_product(&(gamma1[..1].to_vec()), &(gamma2[..1].to_vec()))?;
+
+
+                    let temp3 = mul_helper(&(gamma1[0]), &d);
+                    e1[0] = e1[0].clone() + temp3;
+                    e2[0] = e2[0].clone() + mul_helper(&(gamma2[0]), &(d_inv));
+                    let left = IP::inner_product(&e1, &e2)?;
+                    let temp1 = c_prime + kai_scalar;
+                    let temp2 = mul_helper(&d2_prime, &d) + mul_helper(&d1_prime, &d_inv);
+                    let right = temp1 +temp2;
+                    result = left == right;
+                }
             }
+            Ok(result)
         }
-        Ok(result)
+        else{
+            let mut e1 = proof.e1.clone();
+            let mut e2 = proof.e2.clone();
+
+
+            // Fiat-Schamir challenge
+            let (d, d_inv) = 'challenge: loop {
+            let mut hash_input = Vec::new();
+            //TODO: Should use CanonicalSerialize instead of ToBytes
+            hash_input.extend_from_slice(&to_bytes![
+                e1[0],e2[0]
+                ]?);
+            let d:LMC::Scalar = u128::from_be_bytes(
+                D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
+                )
+                .into();
+                if let Some(d_inv) = d.inverse() {
+                    // Optimization for multiexponentiation to rescale G2 elements with 128-bit challenge
+                    // Swap 'c' and 'c_inv' since can't control bit size of c_inv
+                    break 'challenge (d_inv, d);
+                }
+            };
+
+            // check pairing equation
+            let kai_scalar = IP::inner_product(&(gamma1[..1].to_vec()), &(gamma2[..1].to_vec()))?;
+
+
+            let temp3 = mul_helper(&(gamma1[0]), &d);
+            e1[0] = e1[0].clone() + temp3;
+            e2[0] = e2[0].clone() + mul_helper(&(gamma2[0]), &(d_inv));
+            let left = IP::inner_product(&e1, &e2)?;
+            let temp1 = c.clone() + kai_scalar;
+            let temp2 = mul_helper(d2, &d);
+            let temp4 = mul_helper(d1, &d_inv);
+            let temp5 = add_helper(&temp2, &temp4);
+            let right = add_helper(&temp1,&temp5);
+            result = left == right;
+            Ok(result)
+        }
     }
 
     pub fn prove_with_aux(

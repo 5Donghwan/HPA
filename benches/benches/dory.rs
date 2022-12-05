@@ -59,9 +59,7 @@ where
     let d1 = LMC::commit(&gamma2, &l).unwrap();
     let d2 = RMC::commit(&gamma1, &r).unwrap();
     let c = IP::inner_product(&l, &r).unwrap();
-    /*
-    precompute
-    */
+
     let mut dory_srs = DORY::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone()))).unwrap();
     let mut start = Instant::now();
     let mut proof =
@@ -83,7 +81,7 @@ where
 
 
 fn main() {
-    const LEN: usize = 4;
+    const LEN: usize = 2;
     type GC1 = AFGHOCommitmentG1<Bls12_381>;
     type GC2 = AFGHOCommitmentG2<Bls12_381>;
     let mut rng = StdRng::seed_from_u64(0u64);
