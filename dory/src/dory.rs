@@ -267,6 +267,7 @@ where
 
         println!("round : {}", round);
         println!("kai len : {}", srs.kai.len());
+        println!("r_commitment_steps len : {}", proof.r_commitment_steps.len());        
 
         let c = com.2;
         let d1 = com.0;
@@ -411,6 +412,7 @@ where
         let mut r_commitment_steps = Vec::new();
         let mut r_transcript = Vec::new();
         assert!(v1.len().is_power_of_two());
+
         let (_m_base, _ck_base) = 'recurse: loop {
             let recurse = start_timer!(|| format!("Recurse round size {}", m_a.len()));
             if v1.len() == 1 {
@@ -428,14 +430,10 @@ where
                 let v1_l = &v1.clone()[split..];
                 let v1_r = &v1.clone()[..split];
                 let gamma1_prime = &(gamma1.clone())[..split];
-
-                gamma1 = gamma1_prime.to_vec();
                 
                 let v2_l = &v2.clone()[..split];
                 let v2_r = &v2.clone()[split..];
                 let gamma2_prime = &(gamma2.clone())[split..];
-
-                gamma2 = gamma2_prime.to_vec();
 
                 let cl = start_timer!(|| "Compute D");
                 let d1_l = LMC::commit(gamma2_prime, v1_l)?;
@@ -474,12 +472,11 @@ where
                 let gamma1_message_temp = gamma1_message.clone();
                 let gamma1_beta = cfg_iter!(gamma1_message_temp)
                     .map(|gamma| mul_helper(gamma, &beta)).collect::<Vec<LMC::Message>>();
-                gamma1_message = gamma1_message[..split].to_vec();
                 let gamma2_message_temp = gamma2_message.clone();
                 let gamma2_beta_inv = cfg_iter!(gamma2_message_temp)
                     .map(|gamma| mul_helper(gamma, &beta_inv)).collect::<Vec<RMC::Message>>();
-                gamma2_message = gamma2_message[..split].to_vec();
 
+                // println!("v1 len : {}", v1.len());
                 for i in 0..v1.len() {
                     v1[i] = v1[i].clone() + gamma1_beta[i].clone();
                     v2[i] = v2[i].clone() + gamma2_beta_inv[i].clone();
@@ -488,6 +485,11 @@ where
                 // compute C and message rescale
 
                 let cr = start_timer!(|| "Compute C");
+
+                let v1_l = v1[..split].to_vec();
+                let v1_r = v1[split..].to_vec();
+                let v2_l = v2[..split].to_vec();
+                let v2_r = v2[split..].to_vec();
 
                 let c_plus = IP::inner_product(&v1_l, &v2_r).unwrap();
                 let c_minus = IP::inner_product(&v1_r, &v2_l).unwrap();
@@ -534,6 +536,13 @@ where
                     .map(|(b_1, b_2)| b_1 + b_2.clone())
                     .collect::<Vec<RMC::Message>>();
                 end_timer!(rescale_v2);
+
+                gamma1 = gamma1_prime.to_vec();
+                gamma2 = gamma2_prime.to_vec();
+                gamma1_message = gamma1_message[..split].to_vec();
+                gamma2_message = gamma2_message[..split].to_vec();
+
+
 
                 let com1 = (d1_l, d2_l, c_plus);
                 let com2 = (d1_r, d2_r, c_minus);
