@@ -7,9 +7,9 @@ use self::ark_std::rand::Rng;
 use self::ark_std::{end_timer, start_timer};
 extern  crate digest;
 use self::digest::Digest;
-use std::{convert::TryInto, marker::PhantomData, ops::MulAssign, ops::AddAssign};
+use std::{convert::TryInto, marker::PhantomData, ops::MulAssign};
 
-use crate::{mul_helper, add_helper, Error, InnerProductArgumentError};
+use crate::{mul_helper, Error, InnerProductArgumentError};
 extern crate ark_dh_commitments;
 use self::ark_dh_commitments::DoublyHomomorphicCommitment;
 extern crate ark_inner_products;
@@ -70,8 +70,8 @@ where
     IPC::Output: MulAssign<LMC::Scalar>,
 {
     pub(crate) r_commitment_steps: Vec<(
-        (LMC::Output, RMC::Output, IPC::Message), 
-        (LMC::Output, RMC::Output, IPC::Message),
+        (IP::Output, IP::Output, IPC::Message), 
+        (IP::Output, IP::Output, IPC::Message),
     )>,
     pub(crate) e1: Vec<IP::LeftMessage>,
     pub(crate) e2: Vec<IP::RightMessage>,
@@ -153,10 +153,12 @@ where
     RMC::Output: MulAssign<LMC::Scalar>,
     IPC::Output: MulAssign<LMC::Scalar>,
     LMC::Output: MulAssign<LMC::Scalar>,
-    IPC::Message: AddAssign<LMC::Output>,
-    // IPC::Message: AddAssign<IPC::Message>,
-    IPC::Message: AddAssign<RMC::Output>,
-    RMC::Output: AddAssign<LMC::Output>,
+    // IPC::Message: AddAssign<LMC::Output>,
+    // // IPC::Message: AddAssign<IPC::Message>,
+    // IPC::Message: AddAssign<RMC::Output>,
+    // IPC::Message: AddAssign<LMC::Output>,
+    // RMC::Output: AddAssign<LMC::Output>,
+    // IPC::Output: AddAssign<LMC::Output>,
 {
     pub fn setup<R: Rng>(
         rng: &mut R,
@@ -210,9 +212,9 @@ where
 
     pub fn prove(
         values: (&[IP::LeftMessage], &[IP::RightMessage]),
-        ck: (&[RMC::Key], &[LMC::Key]),
+        // ck: (&[RMC::Key], &[LMC::Key]),
         ck_message: (&[LMC::Message], &[RMC::Message]),
-        com: (&LMC::Output, &RMC::Output, &IP::Output),
+        com: (&IP::Output, &IP::Output, &IP::Output),
     ) -> Result<DORYProof<IP, LMC, RMC, IPC, D>, Error> {
         if IP::inner_product(values.0, values.1)? != com.2.clone() {
             return Err(Box::new(InnerProductArgumentError::InnerProductInvalid));
@@ -224,17 +226,19 @@ where
                 values.1.len(),
             )));
         }
-        if !(LMC::verify(ck.1, values.0, com.0)?
-            && RMC::verify(ck.0, values.1, com.1)?
-            )
-        {
-            return Err(Box::new(InnerProductArgumentError::InnerProductInvalid));
-        }
+        // if !(LMC::verify(ck.1, values.0, com.0)?
+        //     && RMC::verify(ck.0, values.1, com.1)?
+        //     )
+        // {
+        //     return Err(Box::new(InnerProductArgumentError::InnerProductInvalid));
+        // }
 
         // TODO : compare ck and ck_message
 
         let (proof, _) =
-            Self::prove_with_aux((values.0, values.1), (ck.0, ck.1), (ck_message.0, ck_message.1))?;
+            Self::prove_with_aux((values.0, values.1), 
+            // (ck.0, ck.1), 
+            (ck_message.0, ck_message.1))?;
         Ok(proof)
     }
 
@@ -242,7 +246,7 @@ where
         srs: &mut DORYSRS<IP, LMC, RMC, IPC, D>,  //
         // ck: (&[LMC::Key], &[RMC::Key]),
         ck_message: (&[LMC::Message], &[RMC::Message]),
-        com: (&LMC::Output, &RMC::Output, &IP::Output), // com ( d1, d2, c )
+        com: (&IP::Output, &IP::Output, &IP::Output), // com ( d1, d2, c )
         proof: &mut DORYProof<IP, LMC, RMC, IPC, D>,
     ) -> Result<bool, Error> {
         if ck_message.0.len().count_ones() != 1 || ck_message.0.len() != ck_message.1.len() {
@@ -261,36 +265,42 @@ where
         let gamma2 = ck_message.1.clone();
 
         let round = transcript.len();
-        let mut c_prime : IP::Output;
-        let mut d1_prime : IP::Output;
-        let mut d2_prime : IP::Output;
+        // let mut c_prime : &IP::Output;
+        // let mut d1_prime : &IP::Output;
+        // let mut d2_prime : &IP::Output;
 
         println!("round : {}", round);
         println!("kai len : {}", srs.kai.len());
         println!("r_commitment_steps len : {}", proof.r_commitment_steps.len());        
 
-        let c = com.2;
-        let d1 = com.0;
-        let d2 = com.1;
+        let c = com.2.clone();
+        let d1 = com.0.clone();
+        let d2 = com.1.clone();
+
+        let mut c_prime = c.clone().to_owned();
+        let mut d1_prime;
+        let mut d2_prime;
         let mut result = false;
+
         if round > 0 {
             for i in 0..round {
                 println!("check");
                 // Verifier's work in reduce
                 let last_commitment = proof.r_commitment_steps.pop().unwrap();
                 let last_transcript = transcript.pop().unwrap();
-                let temp2 = mul_helper(d1, &(last_transcript.3));
-                let temp = mul_helper(d2, &(last_transcript.2));
-                let temp = add_helper(&temp, &temp2);
+                let temp2 = mul_helper(&d1, &(last_transcript.3));
+                let temp = mul_helper(&d2, &(last_transcript.2));
+                let temp = temp + temp2;//add_helper(&temp, &temp2);
                 let last_kai = srs.kai.pop().unwrap();
-                let temp = add_helper(&last_kai, &temp);
-                c_prime = c.clone() + temp + mul_helper(&(last_commitment.0.2), &(last_transcript.0)) + mul_helper(&(last_commitment.1.2), &(last_transcript.1)); 
-                let temp = mul_helper(&(last_commitment.0.0), &(last_transcript.0)) + last_commitment.1.0;
+                let temp = last_kai + temp;//add_helper(&last_kai, &temp);
+
+                c_prime = c_prime.clone() + temp + mul_helper(&(last_commitment.0.2), &(last_transcript.0)) + mul_helper(&(last_commitment.1.2), &(last_transcript.1)); 
+                let temp = mul_helper(&(last_commitment.0.0.clone()), &(last_transcript.0)) + last_commitment.1.0;
                 d1_prime = mul_helper(&(srs.delta1_l.pop().unwrap()), &(last_transcript.0 * last_transcript.2)) + mul_helper(&(srs.delta1_r.pop().unwrap()), &(last_transcript.2));
-                d1_prime = add_helper(&d1_prime, &temp);
+                d1_prime = d1_prime + temp; //add_helper(&d1_prime, &temp);
                 let temp2 =  mul_helper(&(last_commitment.0.1), &(last_transcript.1)) + last_commitment.1.1;
                 d2_prime = mul_helper(&(srs.delta2_l.pop().unwrap()), &(last_transcript.1 * last_transcript.3)) + mul_helper(&(srs.delta2_r.pop().unwrap()), &(last_transcript.3));
-                d2_prime = add_helper(&(d2_prime), &(temp2));
+                d2_prime = d2_prime + temp2;
 
                 // Scalar product
                 if i == round-1 {
@@ -323,12 +333,23 @@ where
                     let temp3 = mul_helper(&(gamma1[0]), &d);
                     e1[0] = e1[0].clone() + temp3;
                     e2[0] = e2[0].clone() + mul_helper(&(gamma2[0]), &(d_inv));
+
                     let left = IP::inner_product(&e1, &e2)?;
-                    let temp1 = c_prime + kai_scalar;
-                    let temp2 = mul_helper(&d2_prime, &d) + mul_helper(&d1_prime, &d_inv);
-                    let right = temp1 +temp2;
+                    let temp1 = c_prime.clone() + kai_scalar;
+                    let temp2 = mul_helper(&d2_prime, &d);
+                    let temp4 = mul_helper(&d1_prime, &d_inv);
+                    let temp5 = temp2 + temp4;//add_helper(&temp2, &temp4);
+                    let right = temp1 + temp5;//add_helper(&temp1,&temp5);
+                    // let left = IP::inner_product(&e1, &e2)?;
+                    // let temp1 = c_prime + kai_scalar;
+                    // let temp2 = mul_helper(&d2_prime, &d) + mul_helper(&d1_prime, &d_inv);
+                    // let right = temp1 +temp2;
                     result = left == right;
                 }
+
+                // c = c_prime;
+                // d1 = d1_prime;
+                // d2 = d2_prime;
             }
             Ok(result)
         }
@@ -364,10 +385,10 @@ where
             e2[0] = e2[0].clone() + mul_helper(&(gamma2[0]), &(d_inv));
             let left = IP::inner_product(&e1, &e2)?;
             let temp1 = c.clone() + kai_scalar;
-            let temp2 = mul_helper(d2, &d);
-            let temp4 = mul_helper(d1, &d_inv);
-            let temp5 = add_helper(&temp2, &temp4);
-            let right = add_helper(&temp1,&temp5);
+            let temp2 = mul_helper(&d2, &d);
+            let temp4 = mul_helper(&d1, &d_inv);
+            let temp5 = temp2 + temp4;//add_helper(&temp2, &temp4);
+            let right = temp1 + temp5;//add_helper(&temp1,&temp5);
             result = left == right;
             Ok(result)
         }
@@ -375,7 +396,7 @@ where
 
     pub fn prove_with_aux(
         values: (&[IP::LeftMessage], &[IP::RightMessage]),
-        ck: (&[RMC::Key], &[LMC::Key]),
+        // ck: (&[RMC::Key], &[LMC::Key]),
         ck_message: (&[LMC::Message], &[RMC::Message]),
     ) -> Result<
         (
@@ -385,11 +406,11 @@ where
         Error,
     > {
         let (v1, v2) = values;
-        let (gamma1, gamma2) = ck;
+        // let (gamma1, gamma2) = ck;
         let (gamma1_message, gamma2_message) = ck_message;
         Self::_prove(
             (v1.to_vec(), v2.to_vec()),
-            (gamma1.to_vec(), gamma2.to_vec()),
+            // (gamma1.to_vec(), gamma2.to_vec()),
             (gamma1_message.to_vec(), gamma2_message.to_vec()),
         )
     }
@@ -397,7 +418,7 @@ where
     // Returns vector of recursive commitments and transcripts in reverse order
     fn _prove(
         values: (Vec<IP::LeftMessage>, Vec<IP::RightMessage>),
-        ck: (Vec<RMC::Key>, Vec<LMC::Key>),
+        // ck: (Vec<RMC::Key>, Vec<LMC::Key>),
         ck_message: (Vec<LMC::Message>, Vec<RMC::Message>),
     ) -> Result<
         (
@@ -407,7 +428,7 @@ where
         Error,
     > {
         let (mut v1, mut v2) = values.clone();
-        let (mut gamma1, mut gamma2) = ck.clone();
+        // let (gamma1, gamma2) = ck.clone();
         let (mut gamma1_message, mut gamma2_message) = ck_message.clone();
         let mut r_commitment_steps = Vec::new();
         let mut r_transcript = Vec::new();
@@ -419,7 +440,7 @@ where
                 // base case
                 break 'recurse (
                     (v1[0].clone(), v2[0].clone()),
-                    (gamma1[0].clone(), gamma2[0].clone()),
+                    (gamma1_message[0].clone(), gamma2_message[0].clone()),
                 );
             } else {
 
@@ -427,19 +448,19 @@ where
                 // Recurse with problem of half size
                 let split = v1.len() / 2;
 
-                let v1_l = &v1.clone()[split..];
-                let v1_r = &v1.clone()[..split];
-                let gamma1_prime = &(gamma1.clone())[..split];
+                let v1_l = &v1.clone()[..split];
+                let v1_r = &v1.clone()[split..];
+                let gamma1_prime = &(gamma1_message.clone())[..split];
                 
                 let v2_l = &v2.clone()[..split];
                 let v2_r = &v2.clone()[split..];
-                let gamma2_prime = &(gamma2.clone())[split..];
+                let gamma2_prime = &(gamma2_message.clone())[..split];
 
                 let cl = start_timer!(|| "Compute D");
-                let d1_l = LMC::commit(gamma2_prime, v1_l)?;
-                let d1_r = LMC::commit(gamma2_prime, v1_r)?;
-                let d2_l = RMC::commit(gamma1_prime, v2_l)?;
-                let d2_r = RMC::commit(gamma1_prime, v2_r)?;
+                let d1_l = IP::inner_product(v1_l, gamma2_prime)?;
+                let d1_r = IP::inner_product(v1_r, gamma2_prime)?;
+                let d2_l = IP::inner_product(gamma1_prime, v2_l)?;
+                let d2_r = IP::inner_product(gamma1_prime, v2_r)?;
                 
                  // Fiat-Shamir challenge
                  let mut counter_nonce: usize = 0;
@@ -537,8 +558,8 @@ where
                     .collect::<Vec<RMC::Message>>();
                 end_timer!(rescale_v2);
 
-                gamma1 = gamma1_prime.to_vec();
-                gamma2 = gamma2_prime.to_vec();
+                // gamma1 = gamma1_prime.to_vec();
+                // gamma2 = gamma2_prime.to_vec();
                 gamma1_message = gamma1_message[..split].to_vec();
                 gamma2_message = gamma2_message[..split].to_vec();
 
@@ -554,7 +575,7 @@ where
 
         };
 
-        r_transcript.reverse();
+        // r_transcript.reverse();
         r_commitment_steps.reverse();
         Ok((
             DORYProof {
@@ -627,7 +648,7 @@ where
                 // let list_alpha_input = List(hash_input.clone());
                 // println!("prove - hash alpha - {}", list_alpha_input);
 
-                if let Some(alpha_inv) = beta.inverse() {
+                if let Some(alpha_inv) = alpha.inverse() {
                     // Optimization for multiexponentiation to rescale G2 elements with 128-bit challenge
                     // Swap 'c' and 'c_inv' since can't control bit size of c_inv
                     break 'challenge (alpha_inv, alpha);

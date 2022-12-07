@@ -18,7 +18,7 @@ use ark_std::rand::{rngs::StdRng, Rng, SeedableRng};
 use blake2::Blake2b;
 use digest::Digest;
 
-use std::{ops::MulAssign, ops::AddAssign, time::Instant};
+use std::{ops::MulAssign, time::Instant};
 
 fn bench_dory<IP, LMC, RMC, IPC, P, D, R: Rng>(rng: &mut R, len: usize)
 where
@@ -43,9 +43,9 @@ where
     IP::LeftMessage: UniformRand,
     IP::RightMessage: UniformRand,
     LMC::Output: MulAssign<LMC::Scalar>,
-    IPC::Message: AddAssign<LMC::Output>,
-    IPC::Message: AddAssign<RMC::Output>,
-    RMC::Output: AddAssign<LMC::Output>,
+    // IPC::Message: AddAssign<LMC::Output>,
+    // IPC::Message: AddAssign<RMC::Output>,
+    // RMC::Output: AddAssign<LMC::Output>,
 {
     let mut l = Vec::new(); 
     let mut r = Vec::new();
@@ -56,15 +56,15 @@ where
     }
 
     let (gamma2, gamma1) = DORY::<IP,LMC,RMC,IPC, D>::setup(rng, len).unwrap();
-    let d1 = LMC::commit(&gamma2, &l).unwrap();
-    let d2 = RMC::commit(&gamma1, &r).unwrap();
+    let d1 = IP::inner_product(&l, &gamma2).unwrap();
+    let d2 = IP::inner_product(&gamma1, &r).unwrap();
     let c = IP::inner_product(&l, &r).unwrap();
 
     let mut dory_srs = DORY::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone()))).unwrap();
     let mut start = Instant::now();
     let mut proof =
         DORY::<IP, LMC, RMC, IPC, D>::prove((&(l.clone()), &(r.clone())),
-         (&(gamma1.clone()), &(gamma2.clone())), 
+        //  (&(gamma1.clone()), &(gamma2.clone())), 
          (&(gamma1.clone()), &(gamma2.clone())), 
          (&(d1.clone()), &(d2.clone()), &(c.clone()))
         ).unwrap();
@@ -81,7 +81,7 @@ where
 
 
 fn main() {
-    const LEN: usize = 8;
+    const LEN: usize = 4;
     type GC1 = AFGHOCommitmentG1<Bls12_381>;
     type GC2 = AFGHOCommitmentG2<Bls12_381>;
     let mut rng = StdRng::seed_from_u64(0u64);
