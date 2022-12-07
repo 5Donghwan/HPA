@@ -273,13 +273,13 @@ where
         println!("kai len : {}", srs.kai.len());
         println!("r_commitment_steps len : {}", proof.r_commitment_steps.len());        
 
-        let c = com.2.clone();
-        let d1 = com.0.clone();
-        let d2 = com.1.clone();
+        // let c = com.2.clone();
+        // let d1 = com.0.clone();
+        // let d2 = com.1.clone();
 
-        let mut c_prime = c.clone().to_owned();
-        let mut d1_prime;
-        let mut d2_prime;
+        let mut c_prime = com.2.clone();
+        let mut d1_prime = com.0.clone();
+        let mut d2_prime = com.1.clone();
         let mut result = false;
 
         if round > 0 {
@@ -288,8 +288,8 @@ where
                 // Verifier's work in reduce
                 let last_commitment = proof.r_commitment_steps.pop().unwrap();
                 let last_transcript = transcript.pop().unwrap();
-                let temp2 = mul_helper(&d1, &(last_transcript.3));
-                let temp = mul_helper(&d2, &(last_transcript.2));
+                let temp2 = mul_helper(&d1_prime, &(last_transcript.3));
+                let temp = mul_helper(&d2_prime, &(last_transcript.2));
                 let temp = temp + temp2;//add_helper(&temp, &temp2);
                 let last_kai = srs.kai.pop().unwrap();
                 let temp = last_kai + temp;//add_helper(&last_kai, &temp);
@@ -384,9 +384,9 @@ where
             e1[0] = e1[0].clone() + temp3;
             e2[0] = e2[0].clone() + mul_helper(&(gamma2[0]), &(d_inv));
             let left = IP::inner_product(&e1, &e2)?;
-            let temp1 = c.clone() + kai_scalar;
-            let temp2 = mul_helper(&d2, &d);
-            let temp4 = mul_helper(&d1, &d_inv);
+            let temp1 = c_prime.clone() + kai_scalar;
+            let temp2 = mul_helper(&d2_prime, &d);
+            let temp4 = mul_helper(&d1_prime, &d_inv);
             let temp5 = temp2 + temp4;//add_helper(&temp2, &temp4);
             let right = temp1 + temp5;//add_helper(&temp1,&temp5);
             result = left == right;
