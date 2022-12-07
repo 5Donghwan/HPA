@@ -269,9 +269,9 @@ where
         // let mut d1_prime : &IP::Output;
         // let mut d2_prime : &IP::Output;
 
-        println!("round : {}", round);
-        println!("kai len : {}", srs.kai.len());
-        println!("r_commitment_steps len : {}", proof.r_commitment_steps.len());        
+        // println!("round : {}", round);
+        // println!("kai len : {}", srs.kai.len());
+        // println!("r_commitment_steps len : {}", proof.r_commitment_steps.len());        
 
         // let c = com.2.clone();
         // let d1 = com.0.clone();
@@ -284,7 +284,7 @@ where
 
         if round > 0 {
             for i in 0..round {
-                println!("check");
+                // println!("check");
                 // Verifier's work in reduce
                 let last_commitment = proof.r_commitment_steps.pop().unwrap();
                 let last_transcript = transcript.pop().unwrap();

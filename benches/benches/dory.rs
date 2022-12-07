@@ -81,7 +81,7 @@ where
 
 
 fn main() {
-    const LEN: usize = 1;
+    const LEN: usize = 64;
     type GC1 = AFGHOCommitmentG1<Bls12_381>;
     type GC2 = AFGHOCommitmentG2<Bls12_381>;
     let mut rng = StdRng::seed_from_u64(0u64);
