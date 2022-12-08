@@ -81,12 +81,12 @@ where
 
 
 fn main() {
-    const LEN: usize = 64;
+    const LEN: usize = 16;
     type GC1 = AFGHOCommitmentG1<Bls12_381>;
     type GC2 = AFGHOCommitmentG2<Bls12_381>;
     let mut rng = StdRng::seed_from_u64(0u64);
 
-    println!("Benchmarking TIPA with vector length: {}", LEN);
+    println!("Benchmarking DORY with vector length: {}", LEN);
 
     println!("1) Pairing inner product...");
     bench_dory::<

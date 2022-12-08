@@ -1,0 +1,60 @@
+Benchmarking DORY with vector length: 2048
+1) Pairing inner product...
+	 proving time: 25580 ms
+	 verification time: 1222 ms
+result : true
+Benchmarking DORY with vector length: 1024
+1) Pairing inner product...
+	 proving time: 12972 ms
+	 verification time: 1103 ms
+result : true
+Benchmarking DORY with vector length: 512
+1) Pairing inner product...
+	 proving time: 6853 ms
+	 verification time: 1002 ms
+result : true
+Benchmarking DORY with vector length: 256
+1) Pairing inner product...
+	 proving time: 3486 ms
+	 verification time: 895 ms
+result : true
+Benchmarking DORY with vector length: 128
+1) Pairing inner product...
+	 proving time: 1894 ms
+	 verification time: 787 ms
+result : true
+Benchmarking DORY with vector length: 64
+1) Pairing inner product...
+	 proving time: 1116 ms
+	 verification time: 689 ms
+result : true
+Benchmarking DORY with vector length: 32
+1) Pairing inner product...
+	 proving time: 696 ms
+	 verification time: 583 ms
+result : true
+Benchmarking DORY with vector length: 16
+1) Pairing inner product...
+	 proving time: 461 ms
+	 verification time: 479 ms
+result : true
+Benchmarking DORY with vector length: 8
+1) Pairing inner product...
+	 proving time: 300 ms
+	 verification time: 371 ms
+result : true
+Benchmarking DORY with vector length: 4
+1) Pairing inner product...
+	 proving time: 191 ms
+	 verification time: 263 ms
+result : true
+Benchmarking DORY with vector length: 2
+1) Pairing inner product...
+	 proving time: 100 ms
+	 verification time: 153 ms
+result : true
+Benchmarking DORY with vector length: 1
+1) Pairing inner product...
+	 proving time: 12 ms
+	 verification time: 50 ms
+result : true

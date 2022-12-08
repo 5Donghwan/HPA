@@ -1,0 +1,32 @@
+Benchmarking TIPA with vector length: 2048
+1) Pairing inner product...
+	 proving time: 21123 ms
+	 verification time: 774 ms
+Benchmarking TIPA with vector length: 1024
+1) Pairing inner product...
+	 proving time: 10613 ms
+	 verification time: 730 ms
+Benchmarking TIPA with vector length: 512
+1) Pairing inner product...
+	 proving time: 5687 ms
+	 verification time: 647 ms
+Benchmarking TIPA with vector length: 256
+1) Pairing inner product...
+	 proving time: 2985 ms
+	 verification time: 590 ms
+Benchmarking TIPA with vector length: 128
+1) Pairing inner product...
+	 proving time: 1704 ms
+	 verification time: 528 ms
+Benchmarking TIPA with vector length: 64
+1) Pairing inner product...
+	 proving time: 1042 ms
+	 verification time: 468 ms
+Benchmarking TIPA with vector length: 32
+1) Pairing inner product...
+	 proving time: 676 ms
+	 verification time: 416 ms
+Benchmarking TIPA with vector length: 16
+1) Pairing inner product...
+	 proving time: 437 ms
+	 verification time: 344 ms

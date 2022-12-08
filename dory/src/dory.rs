@@ -294,7 +294,7 @@ where
                 let last_kai = srs.kai.pop().unwrap();
                 let temp = last_kai + temp;//add_helper(&last_kai, &temp);
 
-                c_prime = c_prime.clone() + temp + mul_helper(&(last_commitment.0.2), &(last_transcript.0)) + mul_helper(&(last_commitment.1.2), &(last_transcript.1)); 
+                c_prime = c_prime + temp + mul_helper(&(last_commitment.0.2), &(last_transcript.0)) + mul_helper(&(last_commitment.1.2), &(last_transcript.1)); 
                 let temp = mul_helper(&(last_commitment.0.0.clone()), &(last_transcript.0)) + last_commitment.1.0;
                 d1_prime = mul_helper(&(srs.delta1_l.pop().unwrap()), &(last_transcript.0 * last_transcript.2)) + mul_helper(&(srs.delta1_r.pop().unwrap()), &(last_transcript.2));
                 d1_prime = d1_prime + temp; //add_helper(&d1_prime, &temp);
