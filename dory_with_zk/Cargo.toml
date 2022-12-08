@@ -1,5 +1,5 @@
 [package]
-name = "ark-dory"
+name = "ark-dory_with_zk"
 version = "0.3.0"
 authors = [
     "Benedikt Bünz",

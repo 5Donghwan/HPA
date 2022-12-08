@@ -10,15 +10,16 @@ use ark_ff::{UniformRand};
 use ark_inner_products::{
     ExtensionFieldElement, InnerProduct, PairingInnerProduct,
 };
-use ark_dory::dory::{
-    DORY,
-};
+use ark_dory_with_zk::dory_with_zk::DORY;
 
 use ark_std::rand::{rngs::StdRng, Rng, SeedableRng};
 use blake2::Blake2b;
 use digest::Digest;
 
 use std::{ops::MulAssign, time::Instant};
+
+
+
 
 fn bench_dory<IP, LMC, RMC, IPC, P, D, R: Rng>(rng: &mut R, len: usize)
 where
@@ -49,24 +50,35 @@ where
 {
     let mut l = Vec::new(); 
     let mut r = Vec::new();
-  
+
     for _ in 0..len {
         l.push(<IP::LeftMessage>::rand(rng));
         r.push(<IP::RightMessage>::rand(rng));
     }
 
     let (gamma2, gamma1) = DORY::<IP,LMC,RMC,IPC, D>::setup(rng, len).unwrap();
-    let d1 = IP::inner_product(&l, &gamma2).unwrap();
-    let d2 = IP::inner_product(&gamma1, &r).unwrap();
-    let c = IP::inner_product(&l, &r).unwrap();
+    
+    let r_c = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+    let r_d1 = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+    let r_d2 = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+    let mut h1 = Vec::new();
+    let mut h2 = Vec::new();
+    h1.push(<IP::LeftMessage>::rand(rng));
+    h2.push(<IP::RightMessage>::rand(rng));
 
-    let mut dory_srs = DORY::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone()))).unwrap();
+    let (c, d1, d2)
+         = DORY::<IP,LMC,RMC,IPC, D>::init_commit(&l, &r, &gamma1, &gamma2, &r_c, &r_d1, &r_d2, &h1, &h2).unwrap();
+
+    let mut dory_srs = DORY::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone())), &h1, &h2).unwrap();
+
     let mut start = Instant::now();
     let mut proof =
         DORY::<IP, LMC, RMC, IPC, D>::prove((&(l.clone()), &(r.clone())),
-        //  (&(gamma1.clone()), &(gamma2.clone())), 
+         &dory_srs, 
          (&(gamma1.clone()), &(gamma2.clone())), 
-         (&(d1.clone()), &(d2.clone()), &(c.clone()))
+        //  (&(d1.clone()), &(d2.clone()), &(c.clone())),
+         (&r_c, &r_d1, &r_d2),
+         rng
         ).unwrap();
     let mut bench = start.elapsed().as_millis();
     println!("\t proving time: {} ms", bench);
@@ -81,12 +93,12 @@ where
 
 
 fn main() {
-    const LEN: usize = 16;
+    const LEN: usize = 2;
     type GC1 = AFGHOCommitmentG1<Bls12_381>;
     type GC2 = AFGHOCommitmentG2<Bls12_381>;
     let mut rng = StdRng::seed_from_u64(0u64);
 
-    println!("Benchmarking TIPA with vector length: {}", LEN);
+    println!("Benchmarking DORY_with_zk with vector length: {}", LEN);
 
     println!("1) Pairing inner product...");
     bench_dory::<

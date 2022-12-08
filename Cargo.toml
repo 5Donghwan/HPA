@@ -6,4 +6,6 @@ members = [
   "ip_proofs",
   "inner_products",
   "benches",
+  "dory",
+  "dory_with_zk",
 ]

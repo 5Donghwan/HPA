@@ -29,6 +29,7 @@ ark-inner-products = { path = "../inner_products" }
 ark-ip-proofs = { path = "../ip_proofs" }
 ark-dory = { path = "../dory" }
 ark-dh-commitments = { path = "../dh_commitments" }
+ark-dory_with_zk = {path = "../dory_with_zk"}
 
 [[bench]]
 name = "inner_products"

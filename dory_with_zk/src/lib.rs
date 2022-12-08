@@ -5,7 +5,7 @@ use std::{
     ops::MulAssign,
 };
 
-pub mod dory;
+pub mod dory_with_zk;
 
 pub type Error = Box<dyn ErrorTrait>;
 
