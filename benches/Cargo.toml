@@ -51,6 +51,11 @@ path = "benches/dory.rs"
 harness = false
 
 [[bench]]
+name = "dory_with_zk"
+path = "benches/dory_with_zk.rs"
+harness = false
+
+[[bench]]
 name = "poly_commit"
 path = "benches/poly_commit.rs"
 harness = false
@@ -63,3 +68,4 @@ harness = false
 [[example]]
 name = "groth16_aggregation"
 path = "examples/groth16_aggregation.rs"
+
