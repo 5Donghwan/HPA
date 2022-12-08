@@ -1,5 +1,5 @@
 extern crate ark_ff;
-use self::ark_ff::{to_bytes, Field, UniformRand};
+use self::ark_ff::{to_bytes, Field, One, UniformRand, Zero};
 extern crate ark_serialize;
 use self::ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 extern crate ark_std;
@@ -392,11 +392,18 @@ where
                     e2[0] = e2[0].clone() + mul_helper(&(gamma2[0]), &(d_inv));
 
                     let left = IP::inner_product(&e1, &e2)?;
-                    let temp1 = mul_helper(&c_prime, &(ch_c*ch_c)) + kai_scalar + mul_helper(&srs.ht, &(proof.r3 + d*proof.r2.clone() + d_inv * proof.r1.clone()));
+                    let temp1 = mul_helper(&c_prime, &(ch_c*ch_c)) + kai_scalar;
                     let temp2 = mul_helper(&d2_prime, &(d* ch_c));
                     let temp4 = mul_helper(&d1_prime, &(d_inv* ch_c));
                     let temp5 = temp2 + temp4;//add_helper(&temp2, &temp4);
-                    let right = temp1 + temp5 + proof.r.clone() + mul_helper(&proof.q, &ch_c) + mul_helper(&proof.p2, &d) + mul_helper(&proof.p1, &d_inv);
+                    let temp6 = proof.r3 + d*proof.r2.clone() + d_inv * proof.r1.clone();
+                    let one = <LMC as DoublyHomomorphicCommitment>::Scalar::one();
+                    let zero: <LMC as DoublyHomomorphicCommitment>::Scalar = <LMC as DoublyHomomorphicCommitment>::Scalar::zero();
+                    let minus_one = zero - one;
+                    let temp7 = temp6 * minus_one;
+
+                    let right = temp1 + temp5 + proof.r.clone() + mul_helper(&proof.q, &ch_c) + mul_helper(&proof.p2, &d) + mul_helper(&proof.p1, &d_inv)
+                        + mul_helper(&srs.ht, &temp7);
                     // let left = IP::inner_product(&e1, &e2)?;
                     // let temp1 = c_prime + kai_scalar;
                     // let temp2 = mul_helper(&d2_prime, &d) + mul_helper(&d1_prime, &d_inv);
@@ -444,9 +451,14 @@ where
             let temp2 = ch_c * d;
             let temp3 = ch_c * d_inv;
             let temp4 = proof.r3.clone() + d * proof.r2.clone() + d_inv * proof.r1.clone();
+            let one = <LMC as DoublyHomomorphicCommitment>::Scalar::one();
+            let zero: <LMC as DoublyHomomorphicCommitment>::Scalar = <LMC as DoublyHomomorphicCommitment>::Scalar::zero();
+            let minus_one = zero - one;
+            let temp5 = temp4 * minus_one;
+            
             let right = kai_scalar + proof.r.clone() + mul_helper(&proof.q, &ch_c) + mul_helper(&c_prime, &(temp1))
                 + mul_helper(&proof.p2, &d) + mul_helper(&d2_prime, &temp2) + mul_helper(&proof.p1, &d_inv) + mul_helper(&d1_prime, &temp3)
-                + mul_helper(&srs.ht, &temp4);
+                + mul_helper(&srs.ht, &temp5);
 
             result = left == right;
             Ok(result)
