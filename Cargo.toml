@@ -8,4 +8,5 @@ members = [
   "benches",
   "dory",
   "dory_with_zk",
+  "hpa",
 ]
