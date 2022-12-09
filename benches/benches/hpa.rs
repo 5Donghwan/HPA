@@ -16,7 +16,10 @@ use ark_std::rand::{rngs::StdRng, Rng, SeedableRng};
 use blake2::Blake2b;
 use digest::Digest;
 
-use std::{ops::MulAssign, time::Instant};
+use std::{ops::MulAssign, time::Instant}; //, env};
+
+
+
 
 fn bench_hpa<IP, LMC, RMC, IPC, P, D, R: Rng>(rng: &mut R, len: usize)
 where
@@ -47,24 +50,35 @@ where
 {
     let mut l = Vec::new(); 
     let mut r = Vec::new();
-  
+
     for _ in 0..len {
         l.push(<IP::LeftMessage>::rand(rng));
         r.push(<IP::RightMessage>::rand(rng));
     }
 
     let (gamma2, gamma1) = HPA::<IP,LMC,RMC,IPC, D>::setup(rng, len).unwrap();
-    let d1 = IP::inner_product(&l, &gamma2).unwrap();
-    let d2 = IP::inner_product(&gamma1, &r).unwrap();
-    let c = IP::inner_product(&l, &r).unwrap();
+    
+    
+    let mut h1 = Vec::new();
+    let mut h2 = Vec::new();
+    h1.push(<IP::LeftMessage>::rand(rng));
+    h2.push(<IP::RightMessage>::rand(rng));
 
-    let mut hpa_srs = HPA::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone()))).unwrap();
+    let (c, d1, d2,
+        x, y, d3, d4,
+        gm, gm_vec, r_c, r_d1, r_d2, r_x, r_y, r_d3, r_d4)
+         = HPA::<IP,LMC,RMC,IPC, D>::init_commit(&l, &r, &gamma1, &gamma2, &h1, &h2, rng).unwrap();
+
+    let mut hpa_srs = HPA::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone())), &h1, &h2).unwrap();
+
     let mut start = Instant::now();
     let mut proof =
         HPA::<IP, LMC, RMC, IPC, D>::prove((&(l.clone()), &(r.clone())),
-        //  (&(gamma1.clone()), &(gamma2.clone())), 
+         &hpa_srs, 
          (&(gamma1.clone()), &(gamma2.clone())), 
-         (&(d1.clone()), &(d2.clone()), &(c.clone()))
+        //  (&(d1.clone()), &(d2.clone()), &(c.clone())),
+         (&r_c, &r_d1, &r_d2),
+         rng
         ).unwrap();
     let mut bench = start.elapsed().as_millis();
     println!("\t proving time: {} ms", bench);
@@ -78,13 +92,16 @@ where
 }
 
 
-fn main() {
+fn main() { 
+    // let arg = env::args().nth(1).unwrap();
+    // let len: usize =arg.parse().unwrap();
+
     const LEN: usize = 16;
     type GC1 = AFGHOCommitmentG1<Bls12_381>;
     type GC2 = AFGHOCommitmentG2<Bls12_381>;
     let mut rng = StdRng::seed_from_u64(0u64);
 
-    println!("Benchmarking HPA with vector length: {}", LEN);
+    println!("Benchmarking HPA_with_zk with vector length: {}", LEN);
 
     println!("1) Pairing inner product...");
     bench_hpa::<

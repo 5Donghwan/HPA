@@ -1,5 +1,5 @@
 extern crate ark_ff;
-use self::ark_ff::{to_bytes, Field};
+use self::ark_ff::{to_bytes, Field, One, UniformRand, Zero};
 extern crate ark_serialize;
 use self::ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
 extern crate ark_std;
@@ -75,6 +75,13 @@ where
     )>,
     pub(crate) e1: Vec<IP::LeftMessage>,
     pub(crate) e2: Vec<IP::RightMessage>,
+    pub(crate) p1: IP::Output,
+    pub(crate) p2: IP::Output,
+    pub(crate) q: IP::Output,
+    pub(crate) r: IP::Output,
+    pub(crate) r1: LMC::Scalar,
+    pub(crate) r2: LMC::Scalar,
+    pub(crate) r3: LMC::Scalar,
     // pub(crate) r_base: (LMC::Message, RMC::Message),
     _hpa: PhantomData<HPA<IP, LMC, RMC, IPC, D>>,
 }
@@ -104,6 +111,7 @@ where
     pub(crate) delta2_l: Vec<IP::Output>,
     pub(crate) delta2_r: Vec<IP::Output>,
     pub(crate) kai: Vec<IP::Output>,
+    pub(crate) ht: IP::Output,
     
     _hpa: PhantomData<HPA<IP, LMC, RMC, IPC, D>>,
 }
@@ -153,28 +161,108 @@ where
     RMC::Output: MulAssign<LMC::Scalar>,
     IPC::Output: MulAssign<LMC::Scalar>,
     LMC::Output: MulAssign<LMC::Scalar>,
-    // IPC::Message: AddAssign<LMC::Output>,
-    // // IPC::Message: AddAssign<IPC::Message>,
-    // IPC::Message: AddAssign<RMC::Output>,
-    // IPC::Message: AddAssign<LMC::Output>,
-    // RMC::Output: AddAssign<LMC::Output>,
-    // IPC::Output: AddAssign<LMC::Output>,
+    IP::LeftMessage: UniformRand,
+    IP::RightMessage: UniformRand,
 {
+
+    pub fn init_commit<R: Rng>(
+        left_value: &Vec<IP::LeftMessage>,
+        right_value: &Vec<IP::RightMessage>,
+        gamma1: &Vec<IP::LeftMessage>,
+        gamma2: &Vec<IP::RightMessage>,
+        h1: &Vec<IP::LeftMessage>,
+        h2: &Vec<IP::RightMessage>,
+        rng: &mut R
+    ) -> Result<(IP::Output, IP::Output, IP::Output,
+            IP::Output, IP::Output, IP::Output, IP::Output,
+            LMC::Scalar, Vec<LMC::Scalar>, LMC::Scalar,LMC::Scalar,LMC::Scalar,
+            LMC::Scalar,LMC::Scalar,LMC::Scalar,LMC::Scalar), Error> {
+        
+        let l = left_value.clone();
+        let r = right_value.clone();
+        let gamma1 = gamma1.clone();
+        let gamma2 = gamma2.clone();
+        let h1 = h1.clone();
+        let h2 = h2.clone();
+        let ht = IP::inner_product(&h1, &h2)?;
+
+        let r_c = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        let r_d1 = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        let r_d2 = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+
+
+        let c = IP::inner_product(&l, &r)? + mul_helper(&ht, &r_c);
+        let d1 = IP::inner_product(&l, &gamma2)? + mul_helper(&ht, &r_d1);
+        let d2 = IP::inner_product(&gamma1, &r)? + mul_helper(&ht, &r_d2);
+
+        // Fiat-Schamir challenge
+        let gm = 'challenge: loop {
+            let mut hash_input = Vec::new();
+            //TODO: Should use CanonicalSerialize instead of ToBytes
+            hash_input.extend_from_slice(&to_bytes![
+                c, d1, d2
+                ]?);
+            let gm:LMC::Scalar = u128::from_be_bytes(
+                D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
+                )
+                .into();
+            break 'challenge gm;
+        };
+        let mut gm_vec = Vec::new();
+        gm_vec[0] = <LMC as DoublyHomomorphicCommitment>::Scalar::one();
+        for i in 1..l.len(){
+            gm_vec[i] = gm_vec[i-1] * gm;
+        }
+        let mut w_vec = Vec::new();
+        for i in 0..l.len(){
+            w_vec[i] = mul_helper(&l[i], &gm_vec[i]);
+        }
+        let mut k_vec = Vec::new();
+        let zero = <LMC as DoublyHomomorphicCommitment>::Scalar::zero();
+        let temp = <IP::LeftMessage>::rand(rng);
+        let zero_g1 = mul_helper(&temp, &zero);
+        for _ in 0..l.len() {
+            k_vec.push(zero_g1.clone());
+        }
+        
+        let r_x = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        let r_y = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        let r_d3 = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        let r_d4 = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        
+        let x = IP::inner_product(&w_vec, &r).unwrap() + mul_helper(&ht, &r_x);
+        let y = IP::inner_product(&k_vec, &r).unwrap() + mul_helper(&ht, &r_y);
+        let d3 = IP::inner_product(&w_vec, &gamma2).unwrap() + mul_helper(&ht, &r_d3);
+        let d4 = IP::inner_product(&k_vec, &gamma2).unwrap() + mul_helper(&ht, &r_d4);
+
+        Ok((
+            c, d1, d2, x, y, d3, d4, gm, gm_vec, r_c, r_d1, r_d2, r_x, r_y, r_d3, r_d4
+        ))
+    }
+ 
     pub fn setup<R: Rng>(
         rng: &mut R,
         size: usize,
     ) -> Result<(Vec<LMC::Key>, Vec<RMC::Key>), Error> {
+
+        let gamma1 = RMC::setup(rng, size)?;
+        let gamma2 = LMC::setup(rng, size)?;
+
         Ok((
-            LMC::setup(rng, size)?,
-            RMC::setup(rng, size)?,
+            gamma2,
+            gamma1,
         ))
     }
 
     pub fn precompute(
         ck_message: (&[LMC::Message], &[RMC::Message]),
+        h1: &[LMC::Message],
+        h2: &[RMC::Message]
     ) -> Result<HPASRS<IP,LMC,RMC,IPC,D>, Error> {
         // loop : until ck.len() >= 1
         let (mut gamma1, mut gamma2) = ck_message.clone();
+        let h1 = h1.clone();
+        let h2 = h2.clone();
         // let mut i = ck_message.0.len();
         let mut delta1_l = Vec::new();
         let mut delta1_r = Vec::new();
@@ -207,25 +295,29 @@ where
         delta2_r.reverse();
         kai.reverse();
 
-        Ok(HPASRS { delta1_l: delta1_l, delta1_r: delta1_r, delta2_l: delta2_l, delta2_r: delta2_r, kai: kai, _hpa: PhantomData })
+        let ht = IP::inner_product(&h1, &h2)?;
+
+        Ok(HPASRS { delta1_l: delta1_l, delta1_r: delta1_r, delta2_l: delta2_l, delta2_r: delta2_r, kai: kai, ht:ht, _hpa: PhantomData })
     }
 
-    pub fn prove(
+    pub fn prove<R: Rng>(
         values: (&[IP::LeftMessage], &[IP::RightMessage]),
-        // ck: (&[RMC::Key], &[LMC::Key]),
+        srs: &HPASRS<IP,LMC, RMC, IPC, D>,
         ck_message: (&[LMC::Message], &[RMC::Message]),
-        com: (&IP::Output, &IP::Output, &IP::Output),
+        // com: (&IP::Output, &IP::Output, &IP::Output),
+        witness: (&<LMC as DoublyHomomorphicCommitment>::Scalar, &<LMC as DoublyHomomorphicCommitment>::Scalar, &<LMC as DoublyHomomorphicCommitment>::Scalar),
+        rng: &mut R
     ) -> Result<HPAProof<IP, LMC, RMC, IPC, D>, Error> {
-        if IP::inner_product(values.0, values.1)? != com.2.clone() {
-            return Err(Box::new(InnerProductArgumentError::InnerProductInvalid));
-        }
-        if values.0.len().count_ones() != 1 {
-            // Power of 2 length
-            return Err(Box::new(InnerProductArgumentError::MessageLengthInvalid(
-                values.0.len(),
-                values.1.len(),
-            )));
-        }
+        // if IP::inner_product(values.0, values.1)? != com.2.clone() {
+        //     return Err(Box::new(InnerProductArgumentError::InnerProductInvalid));
+        // }
+        // if values.0.len().count_ones() != 1 {
+        //     // Power of 2 length
+        //     return Err(Box::new(InnerProductArgumentError::MessageLengthInvalid(
+        //         values.0.len(),
+        //         values.1.len(),
+        //     )));
+        // }
         // if !(LMC::verify(ck.1, values.0, com.0)?
         //     && RMC::verify(ck.0, values.1, com.1)?
         //     )
@@ -237,8 +329,11 @@ where
 
         let (proof, _) =
             Self::prove_with_aux((values.0, values.1), 
-            // (ck.0, ck.1), 
-            (ck_message.0, ck_message.1))?;
+            srs, 
+            (ck_message.0, ck_message.1),
+            witness,
+            rng
+        )?;
         Ok(proof)
     }
 
@@ -247,7 +342,7 @@ where
         // ck: (&[LMC::Key], &[RMC::Key]),
         ck_message: (&[LMC::Message], &[RMC::Message]),
         com: (&IP::Output, &IP::Output, &IP::Output), // com ( d1, d2, c )
-        proof: &mut HPAProof<IP, LMC, RMC, IPC, D>,
+        proof: &mut HPAProof<IP, LMC, RMC, IPC, D>
     ) -> Result<bool, Error> {
         if ck_message.0.len().count_ones() != 1 || ck_message.0.len() != ck_message.1.len() {
             // Power of 2 length
@@ -257,7 +352,7 @@ where
             )));
         }
         // Calculate transcript
-        let mut transcript = Self::_compute_recursive_challenges(
+        let (mut transcript, ch_c) = Self::_compute_recursive_challenges(
             proof,
         )?;
 
@@ -313,7 +408,7 @@ where
                         let mut hash_input = Vec::new();
                         //TODO: Should use CanonicalSerialize instead of ToBytes
                         hash_input.extend_from_slice(&to_bytes![
-                            e1[0],e2[0]
+                            e1[0],e2[0], proof.r1, proof.r2, proof.r3
                         ]?);
                         let d:LMC::Scalar = u128::from_be_bytes(
                             D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
@@ -335,11 +430,18 @@ where
                     e2[0] = e2[0].clone() + mul_helper(&(gamma2[0]), &(d_inv));
 
                     let left = IP::inner_product(&e1, &e2)?;
-                    let temp1 = c_prime.clone() + kai_scalar;
-                    let temp2 = mul_helper(&d2_prime, &d);
-                    let temp4 = mul_helper(&d1_prime, &d_inv);
+                    let temp1 = mul_helper(&c_prime, &(ch_c*ch_c)) + kai_scalar;
+                    let temp2 = mul_helper(&d2_prime, &(d* ch_c));
+                    let temp4 = mul_helper(&d1_prime, &(d_inv* ch_c));
                     let temp5 = temp2 + temp4;//add_helper(&temp2, &temp4);
-                    let right = temp1 + temp5;//add_helper(&temp1,&temp5);
+                    let temp6 = proof.r3 + d*proof.r2.clone() + d_inv * proof.r1.clone();
+                    let one = <LMC as DoublyHomomorphicCommitment>::Scalar::one();
+                    let zero: <LMC as DoublyHomomorphicCommitment>::Scalar = <LMC as DoublyHomomorphicCommitment>::Scalar::zero();
+                    let minus_one = zero - one;
+                    let temp7 = temp6 * minus_one;
+
+                    let right = temp1 + temp5 + proof.r.clone() + mul_helper(&proof.q, &ch_c) + mul_helper(&proof.p2, &d) + mul_helper(&proof.p1, &d_inv)
+                        + mul_helper(&srs.ht, &temp7);
                     // let left = IP::inner_product(&e1, &e2)?;
                     // let temp1 = c_prime + kai_scalar;
                     // let temp2 = mul_helper(&d2_prime, &d) + mul_helper(&d1_prime, &d_inv);
@@ -363,7 +465,7 @@ where
             let mut hash_input = Vec::new();
             //TODO: Should use CanonicalSerialize instead of ToBytes
             hash_input.extend_from_slice(&to_bytes![
-                e1[0],e2[0]
+                e1[0],e2[0], proof.r1, proof.r2, proof.r3
                 ]?);
             let d:LMC::Scalar = u128::from_be_bytes(
                 D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
@@ -379,25 +481,34 @@ where
             // check pairing equation
             let kai_scalar = IP::inner_product(&(gamma1[..1].to_vec()), &(gamma2[..1].to_vec()))?;
 
-
-            let temp3 = mul_helper(&(gamma1[0]), &d);
-            e1[0] = e1[0].clone() + temp3;
+            e1[0] = e1[0].clone() + mul_helper(&(gamma1[0]), &d);
             e2[0] = e2[0].clone() + mul_helper(&(gamma2[0]), &(d_inv));
             let left = IP::inner_product(&e1, &e2)?;
-            let temp1 = c_prime.clone() + kai_scalar;
-            let temp2 = mul_helper(&d2_prime, &d);
-            let temp4 = mul_helper(&d1_prime, &d_inv);
-            let temp5 = temp2 + temp4;//add_helper(&temp2, &temp4);
-            let right = temp1 + temp5;//add_helper(&temp1,&temp5);
+
+            let temp1 = ch_c * ch_c;
+            let temp2 = ch_c * d;
+            let temp3 = ch_c * d_inv;
+            let temp4 = proof.r3.clone() + d * proof.r2.clone() + d_inv * proof.r1.clone();
+            let one = <LMC as DoublyHomomorphicCommitment>::Scalar::one();
+            let zero: <LMC as DoublyHomomorphicCommitment>::Scalar = <LMC as DoublyHomomorphicCommitment>::Scalar::zero();
+            let minus_one = zero - one;
+            let temp5 = temp4 * minus_one;
+            
+            let right = kai_scalar + proof.r.clone() + mul_helper(&proof.q, &ch_c) + mul_helper(&c_prime, &(temp1))
+                + mul_helper(&proof.p2, &d) + mul_helper(&d2_prime, &temp2) + mul_helper(&proof.p1, &d_inv) + mul_helper(&d1_prime, &temp3)
+                + mul_helper(&srs.ht, &temp5);
+
             result = left == right;
             Ok(result)
         }
     }
 
-    pub fn prove_with_aux(
+    pub fn prove_with_aux<R: Rng>(
         values: (&[IP::LeftMessage], &[IP::RightMessage]),
-        // ck: (&[RMC::Key], &[LMC::Key]),
+        srs: &HPASRS<IP, LMC, RMC, IPC, D>,
         ck_message: (&[LMC::Message], &[RMC::Message]),
+        witness: (&<LMC as DoublyHomomorphicCommitment>::Scalar, &<LMC as DoublyHomomorphicCommitment>::Scalar, &<LMC as DoublyHomomorphicCommitment>::Scalar),
+        rng: &mut R
     ) -> Result<
         (
             HPAProof<IP, LMC, RMC, IPC, D>,
@@ -410,16 +521,20 @@ where
         let (gamma1_message, gamma2_message) = ck_message;
         Self::_prove(
             &(v1.to_vec(), v2.to_vec()),
-            // (gamma1.to_vec(), gamma2.to_vec()),
+            srs,
             (gamma1_message.to_vec(), gamma2_message.to_vec()),
+            witness,
+            rng
         )
     }
 
     // Returns vector of recursive commitments and transcripts in reverse order
-    fn _prove(
+    fn _prove<R: Rng>(
         values: &(Vec<IP::LeftMessage>, Vec<IP::RightMessage>),
-        // ck: (Vec<RMC::Key>, Vec<LMC::Key>),
+        srs: &HPASRS<IP, LMC, RMC, IPC, D>,
         ck_message: (Vec<LMC::Message>, Vec<RMC::Message>),
+        witness: (&<LMC as DoublyHomomorphicCommitment>::Scalar, &<LMC as DoublyHomomorphicCommitment>::Scalar, &<LMC as DoublyHomomorphicCommitment>::Scalar),
+        rng: &mut R
     ) -> Result<
         (
             HPAProof<IP, LMC, RMC, IPC, D>,
@@ -427,12 +542,17 @@ where
         ),
         Error,
     > {
-        let ( mut v1,   mut v2) = values.clone() ;
+        let (mut v1, mut v2) = values.clone() ;
         // let (gamma1, gamma2) = ck.clone();
         let (mut gamma1_message, mut gamma2_message) = ck_message.clone();
         let mut r_commitment_steps = Vec::new();
         let mut r_transcript = Vec::new();
         assert!(v1.len().is_power_of_two());
+
+        let ht = srs.ht.clone();
+        let mut r_c = witness.0.clone();
+        let mut r_d1 = witness.1.clone();
+        let mut r_d2 = witness.2.clone();
 
         let (_m_base, _ck_base) = 'recurse: loop {
             let recurse = start_timer!(|| format!("Recurse round size {}", m_a.len()));
@@ -448,6 +568,11 @@ where
                 // Recurse with problem of half size
                 let split = v1.len() / 2;
 
+                let r_d1l = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+                let r_d1r = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+                let r_d2l = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+                let r_d2r = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+                
                 let v1_l = &v1[..split];
                 let v1_r = &v1[split..];
                 let gamma1_prime = &gamma1_message[..split];
@@ -457,10 +582,10 @@ where
                 let gamma2_prime = &gamma2_message[..split];
 
                 let cl = start_timer!(|| "Compute D");
-                let d1_l = IP::inner_product(&v1_l, &gamma2_prime)?;
-                let d1_r = IP::inner_product(&v1_r, &gamma2_prime)?;
-                let d2_l = IP::inner_product(&gamma1_prime, &v2_l)?;
-                let d2_r = IP::inner_product(&gamma1_prime, &v2_r)?;
+                let d1_l = IP::inner_product(&v1_l, &gamma2_prime)? + mul_helper(&ht, &r_d1l);
+                let d1_r = IP::inner_product(&v1_r, &gamma2_prime)? + mul_helper(&ht, &r_d1r);
+                let d2_l = IP::inner_product(&gamma1_prime, &v2_l)? + mul_helper(&ht, &r_d2l);
+                let d2_r = IP::inner_product(&gamma1_prime, &v2_r)? + mul_helper(&ht, &r_d2r);
                 
                  // Fiat-Shamir challenge
                  let mut counter_nonce: usize = 0;
@@ -498,10 +623,16 @@ where
                     .map(|gamma| mul_helper(gamma, &beta_inv)).collect::<Vec<RMC::Message>>();
 
                 // println!("v1 len : {}", v1.len());
+                
                 for i in 0..v1.len() {
                     v1[i] = v1[i].clone() + gamma1_beta[i].clone();
                     v2[i] = v2[i].clone() + gamma2_beta_inv[i].clone();
                 }
+
+                r_c = r_c.clone() + beta * r_d2.clone() + beta_inv * r_d1.clone();
+        
+                let r_c_plus = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+                let r_c_minus = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
 
                 // compute C and message rescale
 
@@ -512,8 +643,8 @@ where
                 let v2_l = v2[..split].to_vec();
                 let v2_r = v2[split..].to_vec();
 
-                let c_plus = IP::inner_product(&v1_l, &v2_r).unwrap();
-                let c_minus = IP::inner_product(&v1_r, &v2_l).unwrap();
+                let c_plus = IP::inner_product(&v1_l, &v2_r).unwrap() + mul_helper(&ht, &r_c_plus);
+                let c_minus = IP::inner_product(&v1_r, &v2_l).unwrap() + mul_helper(&ht, &r_c_minus);
            
                 end_timer!(cr);
 
@@ -558,6 +689,13 @@ where
                     .collect::<Vec<RMC::Message>>();
                 end_timer!(rescale_v2);
 
+                r_d1 = r_d1l * alpha + r_d1r;
+                r_d2 = r_d2l * alpha_inv + r_d2r;
+                r_c = r_c + alpha * r_c_plus + alpha_inv * r_c_minus;
+
+                // println!("v1 len : {}", v1.len());
+
+
                 // gamma1 = gamma1_prime.to_vec();
                 // gamma2 = gamma2_prime.to_vec();
                 gamma1_message = gamma1_message[..split].to_vec();
@@ -575,19 +713,61 @@ where
 
         };
 
+        let r_p1 = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        let r_p2 = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        let r_q = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        let r_r = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        let mut d1 = Vec::new();
+        let mut d2 = Vec::new();
+        d1.push(<IP::LeftMessage>::rand(rng));
+        d2.push(<IP::RightMessage>::rand(rng));
+
+        let p1 = IP::inner_product(&d1, &gamma2_message).unwrap() + mul_helper(&ht, &r_p1);
+        let p2 = IP::inner_product(&gamma1_message, &d2).unwrap() + mul_helper(&ht, &r_p2);
+        let q = IP::inner_product(&d1, &v2).unwrap() + IP::inner_product(&v1, &d2).unwrap() + mul_helper(&ht, &r_q);
+        let r = IP::inner_product(&d1, &d2).unwrap() + mul_helper(&ht, &r_r);
+
+        let ch_c = 'challenge: loop {
+            let mut hash_input = Vec::new();
+            hash_input.extend_from_slice(&to_bytes![
+                p1, p2, q, r
+            ]?);
+            let ch_c: LMC::Scalar = u128::from_be_bytes(
+                D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
+            )
+            .into();
+
+            break 'challenge ch_c;
+            
+        };
+
+        let mut e1 = Vec::new();
+        let mut e2 = Vec::new();
+        e1.push(d1[0].clone() + mul_helper(&v1[0], &ch_c));
+        e2.push(d2[0].clone() + mul_helper(&v2[0], &ch_c));
+        let r1 = r_p1 + ch_c * r_d1;
+        let r2 = r_p2 + ch_c * r_d2;
+        let r3 = r_r + ch_c * r_q + ch_c * ch_c * r_c;
+
+
+
         // r_transcript.reverse();
         r_commitment_steps.reverse();
         Ok((
             HPAProof {
                 r_commitment_steps,
-                e1: v1,
-                e2: v2,
-                // r_base: m_base,
+                e1,
+                e2,
+                p1,
+                p2,
+                q,
+                r,
+                r1,
+                r2,
+                r3,
                 _hpa: PhantomData,
             },
             HPAAux {
-                // r_transcript,
-                // ck_base,
                 _hpa: PhantomData,
             },
         ))
@@ -596,13 +776,13 @@ where
     // Helper function used to calculate recursive challenges from proof execution (transcript in reverse)
     pub fn verify_recursive_challenge_transcript(
         proof: &HPAProof<IP, LMC, RMC, IPC, D>,
-    ) -> Result<Vec<(LMC::Scalar, LMC::Scalar, LMC::Scalar, LMC::Scalar)>, Error> {
+    ) -> Result<(Vec<(LMC::Scalar, LMC::Scalar, LMC::Scalar, LMC::Scalar)>, LMC::Scalar), Error> {
         Self::_compute_recursive_challenges(proof)
     }
 
     fn _compute_recursive_challenges(
         proof: &HPAProof<IP, LMC, RMC, IPC, D>,
-    ) -> Result<Vec<(LMC::Scalar, LMC::Scalar, LMC::Scalar, LMC::Scalar)>, Error> {
+    ) -> Result<(Vec<(LMC::Scalar, LMC::Scalar, LMC::Scalar, LMC::Scalar)>, LMC::Scalar), Error> {
         // let (mut com1, mut com2) = (proof.r_commitment_steps[0], proof.r_commitment_steps[1]);
 
         let mut r_transcript = Vec::new();
@@ -660,8 +840,23 @@ where
             r_transcript.push((alpha, alpha_inv, beta, beta_inv));
         }
         r_transcript.reverse();
+
+        let ch_c = 'challenge: loop {
+            let mut hash_input = Vec::new();
+            hash_input.extend_from_slice(&to_bytes![
+                proof.p1, proof.p2, proof.q, proof.r
+            ]?);
+            let ch_c: LMC::Scalar = u128::from_be_bytes(
+                D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
+            )
+            .into();
+            
+
+            break 'challenge ch_c;
+            
+        };
         
-        Ok(r_transcript)
+        Ok( (r_transcript, ch_c) )
     }
 }
 
@@ -704,7 +899,7 @@ where
     // pub(crate) fn _verify_base_commitment(
     //     base_ck: (&LMC::Key, &RMC::Key, &Vec<IPC::Key>),
     //     base_com: (LMC::Output, RMC::Output, IPC::Output),
-    //     proof: &DORYProof<IP, LMC, RMC, IPC, D>,
+    //     proof: &HPAProof<IP, LMC, RMC, IPC, D>,
     // ) -> Result<bool, Error> {
     //     let (com_a, com_b, com_t) = base_com;
     //     let (ck_a_base, ck_b_base, ck_t) = base_ck;
@@ -742,6 +937,13 @@ where
             r_commitment_steps: self.r_commitment_steps.clone(),
             e1: self.e1.clone(),
             e2: self.e2.clone(),
+            p1: self.p1.clone(),
+            p2: self.p2.clone(),
+            q: self.q.clone(),
+            r: self.r.clone(),
+            r1: self.r1.clone(),
+            r2: self.r2.clone(),
+            r3: self.r3.clone(),
             // r_base: self.r_base.clone(),
             _hpa: PhantomData,
         }
