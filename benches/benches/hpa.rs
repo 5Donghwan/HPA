@@ -66,18 +66,20 @@ where
 
     let (c, d1, d2,
         x, y, d3, d4,
-        gm, gm_vec, r_c, r_d1, r_d2, r_x, r_y, r_d3, r_d4)
+        gm, gm_vec, r_c, r_d1, r_d2, r_x, r_y, r_d3, r_d4,
+        w_vec, k_vec)
          = HPA::<IP,LMC,RMC,IPC, D>::init_commit(&l, &r, &gamma1, &gamma2, &h1, &h2, rng).unwrap();
 
     let mut hpa_srs = HPA::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone())), &h1, &h2).unwrap();
 
     let mut start = Instant::now();
     let mut proof =
-        HPA::<IP, LMC, RMC, IPC, D>::prove((&(l.clone()), &(r.clone())),
+        HPA::<IP, LMC, RMC, IPC, D>::prove((&(l.clone()), &(r.clone()), &(w_vec.clone()), &(k_vec.clone())),
          &hpa_srs, 
          (&(gamma1.clone()), &(gamma2.clone())), 
         //  (&(d1.clone()), &(d2.clone()), &(c.clone())),
-         (&r_c, &r_d1, &r_d2),
+         (&r_c, &r_x, &r_y, &r_d1, &r_d2, &r_d3, &r_d4),
+         &gm,
          rng
         ).unwrap();
     let mut bench = start.elapsed().as_millis();
