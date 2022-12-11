@@ -66,7 +66,7 @@ where
 
     let (c, d1, d2,
         x, y, d3, d4,
-        gm, gm_vec, r_c, r_d1, r_d2, r_x, r_y, r_d3, r_d4,
+        gm, _gm_vec, r_c, r_d1, r_d2, r_x, r_y, r_d3, r_d4,
         w_vec, k_vec)
          = HPA::<IP,LMC,RMC,IPC, D>::init_commit(&l, &r, &gamma1, &gamma2, &h1, &h2, rng).unwrap();
 
@@ -86,7 +86,7 @@ where
     println!("\t proving time: {} ms", bench);
     start = Instant::now();
     let result = HPA::<IP, LMC, RMC, IPC, D>::verify(&mut hpa_srs, (&(gamma1.clone()), &(gamma2.clone())),
-         (&(d1.clone()), &(d2.clone()), &(c.clone())), &mut proof)
+         (&c, &x, &y, &d1, &d2, &d3, &d4), &mut proof, &gm, rng)
         .unwrap();
     bench = start.elapsed().as_millis();
     println!("\t verification time: {} ms", bench);

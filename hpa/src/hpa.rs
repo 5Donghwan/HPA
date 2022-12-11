@@ -239,13 +239,13 @@ where
             break 'challenge gm;
         };
         let mut gm_vec = Vec::new();
-        gm_vec[0] = <LMC as DoublyHomomorphicCommitment>::Scalar::one();
+        gm_vec.push(<LMC as DoublyHomomorphicCommitment>::Scalar::one());
         for i in 1..l.len() {
-            gm_vec[i] = gm_vec[i - 1] * gm;
+            gm_vec.push(gm_vec[i - 1] * gm);
         }
         let mut w_vec = Vec::new();
         for i in 0..l.len() {
-            w_vec[i] = mul_helper(&l[i], &gm_vec[i]);
+            w_vec.push(mul_helper(&l[i], &gm_vec[i]));
         }
         let mut k_vec = Vec::new();
         let zero = <LMC as DoublyHomomorphicCommitment>::Scalar::zero();
@@ -387,12 +387,14 @@ where
         Ok(proof)
     }
 
-    pub fn verify(
+    pub fn verify<R: Rng>(
         srs: &mut HPASRS<IP, LMC, RMC, IPC, D>, //
         // ck: (&[LMC::Key], &[RMC::Key]),
         ck_message: (&[LMC::Message], &[RMC::Message]),
-        com: (&IP::Output, &IP::Output, &IP::Output), // com ( d1, d2, c )
+        com: (&IP::Output, &IP::Output, &IP::Output, &IP::Output, &IP::Output, &IP::Output, &IP::Output), // com ( c, x, y, d1, d2, d3, d4 )
         proof: &mut HPAProof<IP, LMC, RMC, IPC, D>,
+        gm: &<LMC as DoublyHomomorphicCommitment>::Scalar,
+        rng: &mut R
     ) -> Result<bool, Error> {
         if ck_message.0.len().count_ones() != 1 || ck_message.0.len() != ck_message.1.len() {
             // Power of 2 length
@@ -402,7 +404,8 @@ where
             )));
         }
         // Calculate transcript
-        let (mut transcript, ch_c) = Self::_compute_recursive_challenges(proof)?;
+        
+        let (mut transcript, ch_c) = Self::_compute_recursive_challenges(proof, gm)?;
 
         let gamma1 = ck_message.0.clone();
         let gamma2 = ck_message.1.clone();
@@ -420,9 +423,13 @@ where
         // let d1 = com.0.clone();
         // let d2 = com.1.clone();
 
-        let mut c_prime = com.2.clone();
-        let mut d1_prime = com.0.clone();
-        let mut d2_prime = com.1.clone();
+        let mut c_prime = com.0.clone();
+        let mut x_prime = com.1.clone();
+        let mut y_prime = com.2.clone();
+        let mut d1_prime = com.3.clone();
+        let mut d2_prime = com.4.clone();
+        let mut d3_prime = com.5.clone();
+        let mut d4_prime = com.6.clone();
         let mut result = false;
 
         if round > 0 {
@@ -431,141 +438,134 @@ where
                 // Verifier's work in reduce
                 let last_commitment = proof.r_commitment_steps.pop().unwrap();
                 let last_transcript = transcript.pop().unwrap();
-                let temp2 = mul_helper(&d1_prime, &(last_transcript.3));
-                let temp = mul_helper(&d2_prime, &(last_transcript.2));
-                let temp = temp + temp2; //add_helper(&temp, &temp2);
-                let last_kai = srs.kai.pop().unwrap();
-                let temp = last_kai + temp; //add_helper(&last_kai, &temp);
 
-                c_prime = c_prime
-                    + temp
-                    + mul_helper(&(last_commitment.0 .2), &(last_transcript.0))
-                    + mul_helper(&(last_commitment.1 .2), &(last_transcript.1));
-                let temp = mul_helper(&(last_commitment.0 .0.clone()), &(last_transcript.0))
-                    + last_commitment.1 .0;
-                d1_prime = mul_helper(
-                    &(srs.delta1_l.pop().unwrap()),
-                    &(last_transcript.0 * last_transcript.2),
-                ) + mul_helper(&(srs.delta1_r.pop().unwrap()), &(last_transcript.2));
-                d1_prime = d1_prime + temp; //add_helper(&d1_prime, &temp);
-                let temp2 = mul_helper(&(last_commitment.0 .1), &(last_transcript.1))
-                    + last_commitment.1 .1;
-                d2_prime = mul_helper(
-                    &(srs.delta2_l.pop().unwrap()),
-                    &(last_transcript.1 * last_transcript.3),
-                ) + mul_helper(&(srs.delta2_r.pop().unwrap()), &(last_transcript.3));
-                d2_prime = d2_prime + temp2;
+                let c_l = last_commitment.0.0.clone();
+                let c_r = last_commitment.0.1.clone();
+                let x_l = last_commitment.0.2.clone();
+                let x_r = last_commitment.0.3.clone();
+                let d1_l = last_commitment.1.0.clone();
+                let d1_r = last_commitment.1.1.clone();
+                let d3_l = last_commitment.1.2.clone();
+                let d3_r = last_commitment.1.3.clone();
+
+                assert!(c_prime == c_l + c_r);
+                assert!(x_prime == x_l + x_r);
+                assert!(d1_prime == d1_l + d1_r);
+                assert!(d3_prime == d3_l + d3_r);
+
+                let alpha = last_transcript.0;
+                let alpha_inv = last_transcript.1;
+                let beta = last_transcript.2;
+                let beta_inv = last_transcript.3;
+                let gm_inv = last_transcript.4;
+                let alpha_sqr = alpha * alpha;
+                let alpha_sqr_beta_inv = alpha_sqr * beta_inv;
+                let gm_inv_beta_inv = gm_inv * beta_inv;
+                let alpha_gm_inv = alpha * gm_inv;
+                let alpha_beta_inv = alpha * beta_inv;
+                let alpha_inv_beta = alpha_inv * beta;
+
+                let last_c_x = proof.c_x.pop().unwrap();
+                let last_x_plus = proof.x_plus.pop().unwrap();
+                let last_x_minus = proof.x_minus.pop().unwrap();
+                let last_y_plus = proof.y_plus.pop().unwrap();
+                let last_y_minus = proof.y_minus.pop().unwrap();
+
+                c_prime = mul_helper(&last_commitment.0.0, &alpha_sqr) + last_commitment.0.1 + mul_helper(&last_commitment.1.0, &alpha_sqr_beta_inv) 
+                    + mul_helper(&last_commitment.1.1, &beta_inv) + mul_helper(&last_c_x, &alpha);
+                x_prime = mul_helper(&last_commitment.0.2, &alpha_sqr) + mul_helper(&last_commitment.0.3, &gm_inv) + mul_helper(&last_commitment.1.2, &alpha_sqr_beta_inv)
+                    + mul_helper(&last_commitment.1.3, &gm_inv_beta_inv) + mul_helper(&last_x_plus, &alpha) + mul_helper(&last_x_minus, &alpha_gm_inv);
+                y_prime = y_prime + srs.kai.pop().unwrap() + mul_helper(&d2_prime, &beta) + mul_helper(&d4_prime, &beta_inv) + mul_helper(&last_y_minus, &alpha) + mul_helper(&last_y_plus, &alpha_inv);
+                d1_prime = mul_helper(&last_commitment.2.0, &alpha) + last_commitment.2.1;
+                d2_prime = mul_helper(&last_commitment.2.2, &alpha) + last_commitment.2.3 + mul_helper(&srs.delta2_l.pop().unwrap(), &alpha_beta_inv) + mul_helper(&srs.delta2_r.pop().unwrap(), &beta_inv);
+                d3_prime = mul_helper(&last_commitment.3.0, &alpha) + mul_helper(&last_commitment.3.1, &gm_inv);
+                d4_prime = mul_helper(&last_commitment.3.2, &alpha_inv) + last_commitment.3.3 + mul_helper(&srs.delta1_l.pop().unwrap(), &alpha_inv_beta) + mul_helper(&srs.delta1_r.pop().unwrap(), &beta);
 
                 // Scalar product
                 if i == round - 1 {
                     let mut e1 = proof.e1.clone();
                     let mut e2 = proof.e2.clone();
 
-                    // Fiat-Schamir challenge
-                    let (d, d_inv) = 'challenge: loop {
-                        let mut hash_input = Vec::new();
-                        //TODO: Should use CanonicalSerialize instead of ToBytes
-                        hash_input.extend_from_slice(&to_bytes![
-                            e1[0], e2[0], proof.r1, proof.r2, proof.r3
-                        ]?);
-                        let d: LMC::Scalar = u128::from_be_bytes(
-                            D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
-                        )
-                        .into();
-                        if let Some(d_inv) = d.inverse() {
-                            // Optimization for multiexponentiation to rescale G2 elements with 128-bit challenge
-                            // Swap 'c' and 'c_inv' since can't control bit size of c_inv
-                            break 'challenge (d_inv, d);
-                        }
-                    };
+                    let ch_d = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+                    let ch_d_inv = ch_d.inverse().unwrap();
 
                     // check pairing equation
                     let kai_scalar =
                         IP::inner_product(&(gamma1[..1].to_vec()), &(gamma2[..1].to_vec()))?;
 
-                    let temp3 = mul_helper(&(gamma1[0]), &d);
-                    e1[0] = e1[0].clone() + temp3;
-                    e2[0] = e2[0].clone() + mul_helper(&(gamma2[0]), &(d_inv));
+                    let temp1 = mul_helper(&(gamma1[0]), &ch_d);
+                    e1[0] = e1[0].clone() + temp1;
+                    e2[0] = e2[0].clone() + mul_helper(&(gamma2[0]), &(ch_d_inv));
 
                     let left = IP::inner_product(&e1, &e2)?;
-                    let temp1 = mul_helper(&c_prime, &(ch_c * ch_c)) + kai_scalar;
-                    let temp2 = mul_helper(&d2_prime, &(d * ch_c));
-                    let temp4 = mul_helper(&d1_prime, &(d_inv * ch_c));
-                    let temp5 = temp2 + temp4; //add_helper(&temp2, &temp4);
-                    let temp6 = proof.r3 + d * proof.r2.clone() + d_inv * proof.r1.clone();
+                    
                     let one = <LMC as DoublyHomomorphicCommitment>::Scalar::one();
                     let zero: <LMC as DoublyHomomorphicCommitment>::Scalar =
                         <LMC as DoublyHomomorphicCommitment>::Scalar::zero();
                     let minus_one = zero - one;
-                    let temp7 = temp6 * minus_one;
 
-                    let right = temp1
-                        + temp5
-                        + proof.r.clone()
-                        + mul_helper(&proof.q, &ch_c)
-                        + mul_helper(&proof.p2, &d)
-                        + mul_helper(&proof.p1, &d_inv)
-                        + mul_helper(&srs.ht, &temp7);
-                    // let left = IP::inner_product(&e1, &e2)?;
-                    // let temp1 = c_prime + kai_scalar;
-                    // let temp2 = mul_helper(&d2_prime, &d) + mul_helper(&d1_prime, &d_inv);
-                    // let right = temp1 +temp2;
+                    let mut ch_c_vec = Vec::new();
+                    ch_c_vec.push(ch_c.clone()); // ch_c_vec = {c^1, c^2, c^3, ..., c^11}
+                    for i in 1..11{
+                        ch_c_vec.push(ch_c_vec[i-1] * ch_c);
+                    }
+
+                    let mut temp2 = c_prime.clone() + mul_helper(&x_prime, &(ch_c_vec[2] + ch_c_vec[5])) + mul_helper(&y_prime, &ch_c_vec[8]);
+                    temp2 = mul_helper(&temp2, &ch_c_vec[1]);
+                    let mut temp3 = d1_prime.clone() + mul_helper(&d3_prime, &(ch_c_vec[2] + ch_c_vec[5])) + mul_helper(&d4_prime, &ch_c_vec[8]);
+                    temp3 = mul_helper(&temp3, &(ch_c * ch_d_inv));
+                    let mut temp4 = proof.q1.clone() + mul_helper(&proof.q2, &ch_c_vec[2]) + mul_helper(&proof.q3, &ch_c_vec[5]) + mul_helper(&proof.p3, &ch_c_vec[8]);
+                    temp4 = mul_helper(&temp4, &ch_c);
+                    let temp5 = ch_d_inv * proof.r1 + ch_d * proof.r2 + proof.r3;
+                    let mut temp6 = mul_helper(&srs.ht, &temp5);
+                    temp6 = mul_helper(&temp6, &minus_one);
+
+                    let right = kai_scalar + temp2 + mul_helper(&d2_prime, &(ch_c * ch_d)) + temp3 + temp4 + mul_helper(&proof.p1, &ch_d_inv)
+                        + mul_helper(&proof.p2, &ch_d) + proof.r.clone() + temp6;
+                    
                     result = left == right;
                 }
-
-                // c = c_prime;
-                // d1 = d1_prime;
-                // d2 = d2_prime;
             }
             Ok(result)
         } else {
+            
             let mut e1 = proof.e1.clone();
             let mut e2 = proof.e2.clone();
 
-            // Fiat-Schamir challenge
-            let (d, d_inv) = 'challenge: loop {
-                let mut hash_input = Vec::new();
-                //TODO: Should use CanonicalSerialize instead of ToBytes
-                hash_input
-                    .extend_from_slice(&to_bytes![e1[0], e2[0], proof.r1, proof.r2, proof.r3]?);
-                let d: LMC::Scalar = u128::from_be_bytes(
-                    D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
-                )
-                .into();
-                if let Some(d_inv) = d.inverse() {
-                    // Optimization for multiexponentiation to rescale G2 elements with 128-bit challenge
-                    // Swap 'c' and 'c_inv' since can't control bit size of c_inv
-                    break 'challenge (d_inv, d);
-                }
-            };
+            let ch_d = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+            let ch_d_inv = ch_d.inverse().unwrap();
 
             // check pairing equation
             let kai_scalar = IP::inner_product(&(gamma1[..1].to_vec()), &(gamma2[..1].to_vec()))?;
 
-            e1[0] = e1[0].clone() + mul_helper(&(gamma1[0]), &d);
-            e2[0] = e2[0].clone() + mul_helper(&(gamma2[0]), &(d_inv));
+            e1[0] = e1[0].clone() + mul_helper(&(gamma1[0]), &ch_d);
+            e2[0] = e2[0].clone() + mul_helper(&(gamma2[0]), &(ch_d_inv));
             let left = IP::inner_product(&e1, &e2)?;
 
-            let temp1 = ch_c * ch_c;
-            let temp2 = ch_c * d;
-            let temp3 = ch_c * d_inv;
-            let temp4 = proof.r3.clone() + d * proof.r2.clone() + d_inv * proof.r1.clone();
             let one = <LMC as DoublyHomomorphicCommitment>::Scalar::one();
             let zero: <LMC as DoublyHomomorphicCommitment>::Scalar =
                 <LMC as DoublyHomomorphicCommitment>::Scalar::zero();
             let minus_one = zero - one;
-            let temp5 = temp4 * minus_one;
 
-            let right = kai_scalar
-                + proof.r.clone()
-                + mul_helper(&proof.q, &ch_c)
-                + mul_helper(&c_prime, &(temp1))
-                + mul_helper(&proof.p2, &d)
-                + mul_helper(&d2_prime, &temp2)
-                + mul_helper(&proof.p1, &d_inv)
-                + mul_helper(&d1_prime, &temp3)
-                + mul_helper(&srs.ht, &temp5);
+            let mut ch_c_vec = Vec::new();
+            ch_c_vec[0] = ch_c; // ch_c_vec = {c^1, c^2, c^3, ..., c^11}
+            for i in 1..11{
+                ch_c_vec[i] = ch_c_vec[i-1] * ch_c;
+            }
 
+            let mut temp2 = c_prime.clone() + mul_helper(&x_prime, &(ch_c_vec[2] + ch_c_vec[5])) + mul_helper(&y_prime, &ch_c_vec[8]);
+            temp2 = mul_helper(&temp2, &ch_c_vec[1]);
+            let mut temp3 = d1_prime.clone() + mul_helper(&d3_prime, &(ch_c_vec[2] + ch_c_vec[5])) + mul_helper(&d4_prime, &ch_c_vec[8]);
+            temp3 = mul_helper(&temp3, &(ch_c * ch_d_inv));
+            let mut temp4 = proof.q1.clone() + mul_helper(&proof.q2, &ch_c_vec[2]) + mul_helper(&proof.q3, &ch_c_vec[5]) + mul_helper(&proof.p3, &ch_c_vec[8]);
+            temp4 = mul_helper(&temp4, &ch_c);
+            let temp5 = ch_d_inv * proof.r1 + ch_d * proof.r2 + proof.r3;
+            let mut temp6 = mul_helper(&srs.ht, &temp5);
+            temp6 = mul_helper(&temp6, &minus_one);
+
+            let right = kai_scalar + temp2 + mul_helper(&d2_prime, &(ch_c * ch_d)) + temp3 + temp4 + mul_helper(&proof.p1, &ch_d_inv)
+                + mul_helper(&proof.p2, &ch_d) + proof.r.clone() + temp6;
+            
             result = left == right;
             Ok(result)
         }
@@ -682,7 +682,7 @@ where
                 let v1_l = &v1[..split];
                 let v1_r = &v1[split..];
                 let gamma1_prime = &gamma1_message[..split];
-                let gamma1_r = &gamma1_message[split..];
+                // let gamma1_r = &gamma1_message[split..];
 
                 let v2_l = &v2[..split];
                 let v2_r = &v2[split..];
@@ -989,29 +989,36 @@ where
     // Helper function used to calculate recursive challenges from proof execution (transcript in reverse)
     pub fn verify_recursive_challenge_transcript(
         proof: &HPAProof<IP, LMC, RMC, IPC, D>,
+        gm: &<LMC as DoublyHomomorphicCommitment>::Scalar
     ) -> Result<
         (
-            Vec<(LMC::Scalar, LMC::Scalar, LMC::Scalar, LMC::Scalar)>,
+            Vec<(LMC::Scalar, LMC::Scalar, LMC::Scalar, LMC::Scalar, LMC::Scalar)>,
             LMC::Scalar,
         ),
         Error,
     > {
-        Self::_compute_recursive_challenges(proof)
+        Self::_compute_recursive_challenges(proof, gm)
     }
 
     fn _compute_recursive_challenges(
         proof: &HPAProof<IP, LMC, RMC, IPC, D>,
+        gm: &<LMC as DoublyHomomorphicCommitment>::Scalar
     ) -> Result<
         (
-            Vec<(LMC::Scalar, LMC::Scalar, LMC::Scalar, LMC::Scalar)>,
+            Vec<(LMC::Scalar, LMC::Scalar, LMC::Scalar, LMC::Scalar, LMC::Scalar)>,
             LMC::Scalar,
         ),
         Error,
     > {
-        // let (mut com1, mut com2) = (proof.r_commitment_steps[0], proof.r_commitment_steps[1]);
 
         let mut r_transcript = Vec::new();
-        for (com_1, com_2) in proof.r_commitment_steps.iter().rev() {
+        let mut c_x = proof.c_x.clone();
+        let mut x_plus = proof.x_plus.clone();
+        let mut x_minus = proof.x_minus.clone();
+        let mut y_plus = proof.y_plus.clone();
+        let mut y_minus = proof.y_minus.clone();
+
+        for (com_1, com_2, com_3, com_4) in proof.r_commitment_steps.iter().rev() {
             // First Fiat-Shamir challenge
             let mut counter_nonce: usize = 0;
             // let default_transcript = (Default::default(), Default::default(),Default::default(),Default::default());
@@ -1019,7 +1026,8 @@ where
             let (beta, beta_inv) = 'challenge: loop {
                 let mut hash_input = Vec::new();
                 hash_input.extend_from_slice(&counter_nonce.to_be_bytes()[..]);
-                hash_input.extend_from_slice(&to_bytes![com_1.0, com_2.0, com_1.1, com_2.1]?);
+                hash_input.extend_from_slice(&to_bytes![com_1.0, com_1.1, com_1.2, com_1.3, com_2.0, com_2.1, com_2.2, com_2.3,
+                    com_3.0, com_3.1, com_3.2, com_3.3, com_4.0, com_4.1, com_4.2, com_4.3]?);
                 let beta: LMC::Scalar = u128::from_be_bytes(
                     D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
                 )
@@ -1040,7 +1048,7 @@ where
             let (alpha, alpha_inv) = 'challenge: loop {
                 let mut hash_input = Vec::new();
                 hash_input.extend_from_slice(&counter_nonce.to_be_bytes()[..]);
-                hash_input.extend_from_slice(&to_bytes![com_1.2, com_2.2]?);
+                hash_input.extend_from_slice(&to_bytes![c_x.pop().unwrap(), x_plus.pop().unwrap(), x_minus.pop().unwrap(), y_plus.pop().unwrap(), y_minus.pop().unwrap()]?);        ////////////////
                 let alpha: LMC::Scalar = u128::from_be_bytes(
                     D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
                 )
@@ -1057,13 +1065,21 @@ where
                 counter_nonce += 1;
             };
 
-            r_transcript.push((alpha, alpha_inv, beta, beta_inv));
+
+            // TODO: compute gm, and push it also
+            let mut gm_inv = gm.inverse().unwrap();
+            let len = c_x.len();
+            for _ in 0..len {
+                gm_inv = gm_inv * gm_inv;
+            }
+
+            r_transcript.push((alpha, alpha_inv, beta, beta_inv, gm_inv));
         }
         r_transcript.reverse();
 
         let ch_c = 'challenge: loop {
             let mut hash_input = Vec::new();
-            hash_input.extend_from_slice(&to_bytes![proof.p1, proof.p2, proof.q, proof.r]?);
+            hash_input.extend_from_slice(&to_bytes![proof.p1, proof.p2, proof.p3, proof.q1, proof.q2, proof.q3, proof.r]?);
             let ch_c: LMC::Scalar =
                 u128::from_be_bytes(D::digest(&hash_input).as_slice()[0..16].try_into().unwrap())
                     .into();
@@ -1148,11 +1164,19 @@ where
     fn clone(&self) -> Self {
         HPAProof {
             r_commitment_steps: self.r_commitment_steps.clone(),
+            c_x: self.c_x.clone(),
+            x_plus: self.x_plus.clone(),
+            x_minus: self.x_minus.clone(),
+            y_plus: self.y_plus.clone(),
+            y_minus: self.y_minus.clone(),
             e1: self.e1.clone(),
             e2: self.e2.clone(),
             p1: self.p1.clone(),
             p2: self.p2.clone(),
-            q: self.q.clone(),
+            p3: self.p3.clone(),
+            q1: self.q1.clone(),
+            q2: self.q2.clone(),
+            q3: self.q3.clone(),
             r: self.r.clone(),
             r1: self.r1.clone(),
             r2: self.r2.clone(),
