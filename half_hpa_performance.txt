@@ -1,0 +1,60 @@
+Benchmarking HPA_with_zk with vector length: 1
+1) Pairing inner product...
+	 proving time: 27 ms
+	 verification time: 23 ms
+result : true
+Benchmarking HPA_with_zk with vector length: 2
+1) Pairing inner product...
+	 proving time: 79 ms
+	 verification time: 45 ms
+result : true
+Benchmarking HPA_with_zk with vector length: 4
+1) Pairing inner product...
+	 proving time: 136 ms
+	 verification time: 71 ms
+result : true
+Benchmarking HPA_with_zk with vector length: 8
+1) Pairing inner product...
+	 proving time: 201 ms
+	 verification time: 97 ms
+result : true
+Benchmarking HPA_with_zk with vector length: 16
+1) Pairing inner product...
+	 proving time: 275 ms
+	 verification time: 123 ms
+result : true
+Benchmarking HPA_with_zk with vector length: 32
+1) Pairing inner product...
+	 proving time: 372 ms
+	 verification time: 148 ms
+result : true
+Benchmarking HPA_with_zk with vector length: 64
+1) Pairing inner product...
+	 proving time: 522 ms
+	 verification time: 174 ms
+result : true
+Benchmarking HPA_with_zk with vector length: 128
+1) Pairing inner product...
+	 proving time: 759 ms
+	 verification time: 201 ms
+result : true
+Benchmarking HPA_with_zk with vector length: 256
+1) Pairing inner product...
+	 proving time: 1142 ms
+	 verification time: 227 ms
+result : true
+Benchmarking HPA_with_zk with vector length: 512
+1) Pairing inner product...
+	 proving time: 1854 ms
+	 verification time: 253 ms
+result : true
+Benchmarking HPA_with_zk with vector length: 1024
+1) Pairing inner product...
+	 proving time: 3211 ms
+	 verification time: 277 ms
+result : true
+Benchmarking HPA_with_zk with vector length: 2048
+1) Pairing inner product...
+	 proving time: 5871 ms
+	 verification time: 302 ms
+result : true

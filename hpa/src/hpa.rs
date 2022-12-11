@@ -181,6 +181,38 @@ where
     IP::LeftMessage: UniformRand,
     IP::RightMessage: UniformRand,
 {
+
+    pub fn set_values(
+        l: &[<LMC as DoublyHomomorphicCommitment>::Scalar],
+        r: &[<LMC as DoublyHomomorphicCommitment>::Scalar],
+        generator_g1: &IP::LeftMessage,
+        generator_g2: &IP::RightMessage,
+    ) -> Result<
+        (
+            Vec<IP::LeftMessage>,
+            Vec<IP::RightMessage>,
+            Vec<IP::LeftMessage>,
+            Vec<IP::RightMessage>
+        ), Error >
+    {
+        let mut v1 = Vec::new();
+        let mut v2 = Vec::new();
+        let mut u1 = Vec::new();
+        let mut u2 = Vec::new();
+
+        let len = l.len();
+        let one = <LMC as DoublyHomomorphicCommitment>::Scalar::one();
+        let g2_one = mul_helper(&generator_g2.clone(), &one);
+        for i in 0..len {
+            v1.push(mul_helper(&generator_g1.clone(), &l[i]));
+            v2.push(mul_helper(&generator_g2.clone(), &r[i]));
+            u1.push(mul_helper(&generator_g1.clone(), &(l[i] * r[i])));
+            u2.push(g2_one.clone());
+        }
+
+        Ok((v1, v2, u1, u2))
+    }
+
     pub fn init_commit<R: Rng>(
         left_value: &Vec<IP::LeftMessage>,
         right_value: &Vec<IP::RightMessage>,
@@ -267,6 +299,105 @@ where
 
         Ok((
             c, d1, d2, x, y, d3, d4, gm, gm_vec, r_c, r_d1, r_d2, r_x, r_y, r_d3, r_d4, w_vec,
+            k_vec,
+        ))
+    }
+
+    pub fn init_commit2<R: Rng>(
+        left_value: &Vec<IP::LeftMessage>,
+        right_value: &Vec<IP::RightMessage>,
+        gamma1: &Vec<IP::LeftMessage>,
+        gamma2: &Vec<IP::RightMessage>,
+        h1: &Vec<IP::LeftMessage>,
+        h2: &Vec<IP::RightMessage>,
+        // gm: &<LMC as DoublyHomomorphicCommitment>::Scalar,
+        gm_vec: &Vec<<LMC as DoublyHomomorphicCommitment>::Scalar>,
+        r_c: &<LMC as DoublyHomomorphicCommitment>::Scalar,
+        r_d1: &<LMC as DoublyHomomorphicCommitment>::Scalar,
+        r_d2: &<LMC as DoublyHomomorphicCommitment>::Scalar,
+        r_x: &<LMC as DoublyHomomorphicCommitment>::Scalar,
+        r_y: &<LMC as DoublyHomomorphicCommitment>::Scalar,
+        r_d3: &<LMC as DoublyHomomorphicCommitment>::Scalar,
+        r_d4: &<LMC as DoublyHomomorphicCommitment>::Scalar,
+        rng: &mut R,
+    ) -> Result<
+        (
+            IP::Output,
+            IP::Output,
+            IP::Output,
+            IP::Output,
+            IP::Output,
+            IP::Output,
+            IP::Output,
+            // LMC::Scalar,
+            // Vec<LMC::Scalar>,
+            // LMC::Scalar,
+            // LMC::Scalar,
+            // LMC::Scalar,
+            // LMC::Scalar,
+            // LMC::Scalar,
+            // LMC::Scalar,
+            // LMC::Scalar,
+            Vec<IP::LeftMessage>,
+            Vec<IP::LeftMessage>,
+        ),
+        Error,
+    > {
+        let l = left_value.clone();
+        let r = right_value.clone();
+        let gamma1 = gamma1.clone();
+        let gamma2 = gamma2.clone();
+        let h1 = h1.clone();
+        let h2 = h2.clone();
+        let ht = IP::inner_product(&h1, &h2)?;
+
+        // let r_c = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        // let r_d1 = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        // let r_d2 = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+
+        let c = IP::inner_product(&l, &r)? + mul_helper(&ht, &r_c);
+        let d1 = IP::inner_product(&l, &gamma2)? + mul_helper(&ht, &r_d1);
+        let d2 = IP::inner_product(&gamma1, &r)? + mul_helper(&ht, &r_d2);
+
+        // Fiat-Schamir challenge
+        // let gm = 'challenge: loop {
+        //     let mut hash_input = Vec::new();
+        //     //TODO: Should use CanonicalSerialize instead of ToBytes
+        //     hash_input.extend_from_slice(&to_bytes![c, d1, d2]?);
+        //     let gm: LMC::Scalar =
+        //         u128::from_be_bytes(D::digest(&hash_input).as_slice()[0..16].try_into().unwrap())
+        //             .into();
+        //     break 'challenge gm;
+        // };
+        // let mut gm_vec = Vec::new();
+        // gm_vec.push(<LMC as DoublyHomomorphicCommitment>::Scalar::one());
+        // for i in 1..l.len() {
+        //     gm_vec.push(gm_vec[i - 1] * gm);
+        // }
+        let mut w_vec = Vec::new();
+        for i in 0..l.len() {
+            w_vec.push(mul_helper(&l[i], &gm_vec[i]));
+        }
+        let mut k_vec = Vec::new();
+        let zero = <LMC as DoublyHomomorphicCommitment>::Scalar::zero();
+        let temp = <IP::LeftMessage>::rand(rng);
+        let zero_g1 = mul_helper(&temp, &zero);
+        for _ in 0..l.len() {
+            k_vec.push(zero_g1.clone());
+        }
+
+        // let r_x = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        // let r_y = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        // let r_d3 = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        // let r_d4 = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+
+        let x = IP::inner_product(&w_vec, &r).unwrap() + mul_helper(&ht, &r_x);
+        let y = IP::inner_product(&k_vec, &r).unwrap() + mul_helper(&ht, &r_y);
+        let d3 = IP::inner_product(&w_vec, &gamma2).unwrap() + mul_helper(&ht, &r_d3);
+        let d4 = IP::inner_product(&k_vec, &gamma2).unwrap() + mul_helper(&ht, &r_d4);
+
+        Ok((
+            c, d1, d2, x, y, d3, d4, w_vec,
             k_vec,
         ))
     }
@@ -548,9 +679,9 @@ where
             let minus_one = zero - one;
 
             let mut ch_c_vec = Vec::new();
-            ch_c_vec[0] = ch_c; // ch_c_vec = {c^1, c^2, c^3, ..., c^11}
+            ch_c_vec.push(ch_c.clone()); // ch_c_vec = {c^1, c^2, c^3, ..., c^11}
             for i in 1..11{
-                ch_c_vec[i] = ch_c_vec[i-1] * ch_c;
+                ch_c_vec.push(ch_c_vec[i-1] * ch_c);
             }
 
             let mut temp2 = c_prime.clone() + mul_helper(&x_prime, &(ch_c_vec[2] + ch_c_vec[5])) + mul_helper(&y_prime, &ch_c_vec[8]);
@@ -1089,6 +1220,9 @@ where
 
         Ok((r_transcript, ch_c))
     }
+
+  
+
 }
 
 // pub(crate) fn _compute_final_commitment_keys(

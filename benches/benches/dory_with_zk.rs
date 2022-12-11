@@ -96,7 +96,7 @@ fn main() {
     // let arg = env::args().nth(1).unwrap();
     // let len: usize =arg.parse().unwrap();
 
-    const LEN: usize = 32768;
+    const LEN: usize = 16;
     type GC1 = AFGHOCommitmentG1<Bls12_381>;
     type GC2 = AFGHOCommitmentG2<Bls12_381>;
     let mut rng = StdRng::seed_from_u64(0u64);
