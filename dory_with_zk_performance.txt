@@ -1,0 +1,60 @@
+Benchmarking DORY_with_zk with vector length: 1
+1) Pairing inner product...
+	 proving time: 20 ms
+	 verification time: 13 ms
+result : true
+Benchmarking DORY_with_zk with vector length: 2
+1) Pairing inner product...
+	 proving time: 38 ms
+	 verification time: 21 ms
+result : true
+Benchmarking DORY_with_zk with vector length: 4
+1) Pairing inner product...
+	 proving time: 50 ms
+	 verification time: 30 ms
+result : true
+Benchmarking DORY_with_zk with vector length: 8
+1) Pairing inner product...
+	 proving time: 66 ms
+	 verification time: 39 ms
+result : true
+Benchmarking DORY_with_zk with vector length: 16
+1) Pairing inner product...
+	 proving time: 89 ms
+	 verification time: 49 ms
+result : true
+Benchmarking DORY_with_zk with vector length: 32
+1) Pairing inner product...
+	 proving time: 123 ms
+	 verification time: 60 ms
+result : true
+Benchmarking DORY_with_zk with vector length: 64
+1) Pairing inner product...
+	 proving time: 166 ms
+	 verification time: 69 ms
+result : true
+Benchmarking DORY_with_zk with vector length: 128
+1) Pairing inner product...
+	 proving time: 238 ms
+	 verification time: 80 ms
+result : true
+Benchmarking DORY_with_zk with vector length: 256
+1) Pairing inner product...
+	 proving time: 369 ms
+	 verification time: 89 ms
+result : true
+Benchmarking DORY_with_zk with vector length: 512
+1) Pairing inner product...
+	 proving time: 618 ms
+	 verification time: 100 ms
+result : true
+Benchmarking DORY_with_zk with vector length: 1024
+1) Pairing inner product...
+	 proving time: 1077 ms
+	 verification time: 113 ms
+result : true
+Benchmarking DORY_with_zk with vector length: 2048
+1) Pairing inner product...
+	 proving time: 2009 ms
+	 verification time: 122 ms
+result : true

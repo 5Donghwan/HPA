@@ -85,6 +85,8 @@ where
 
 
     let mut hpa_srs = HPA::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone())), &h1, &h2).unwrap();
+    let mut hpa_srs_ = HPA::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone())), &h1, &h2).unwrap();
+
 
     let mut start = Instant::now();
     let mut proof =
@@ -97,7 +99,6 @@ where
          rng
         ).unwrap();
 
-    let mut hpa_srs_ = HPA::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone())), &h1, &h2).unwrap();
     // let mut start = Instant::now();
     let mut proof_ =
         HPA::<IP, LMC, RMC, IPC, D>::prove((&(u1.clone()), &(u2.clone()), &(w_vec_.clone()), &(k_vec_.clone())),

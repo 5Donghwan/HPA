@@ -31,6 +31,8 @@ ark-dory = { path = "../dory" }
 ark-dh-commitments = { path = "../dh_commitments" }
 ark-dory_with_zk = {path = "../dory_with_zk"}
 ark-hpa = {path = "../hpa"}
+ark-hpa-bp = {path = "../hpa_bp"}
+
 
 [[bench]]
 name = "inner_products"
@@ -60,6 +62,11 @@ harness = false
 [[bench]]
 name = "hpa"
 path = "benches/hpa.rs"
+harness = false
+
+[[bench]]
+name = "hpa_bp"
+path = "benches/hpa_bp.rs"
 harness = false
 
 [[bench]]

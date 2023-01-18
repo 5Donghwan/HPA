@@ -1,0 +1,84 @@
+Benchmarking HPA_with_zk with vector length: 1
+1) Pairing hadamard product...
+X == X' : true
+	 proving time: 42 ms
+	 verification time: 41 ms
+v1, v2 - result : true
+u1, u2 - result : true
+Benchmarking HPA_with_zk with vector length: 2
+1) Pairing hadamard product...
+X == X' : true
+	 proving time: 153 ms
+	 verification time: 93 ms
+v1, v2 - result : true
+u1, u2 - result : true
+Benchmarking HPA_with_zk with vector length: 4
+1) Pairing hadamard product...
+X == X' : true
+	 proving time: 282 ms
+	 verification time: 145 ms
+v1, v2 - result : true
+u1, u2 - result : true
+Benchmarking HPA_with_zk with vector length: 8
+1) Pairing hadamard product...
+X == X' : true
+	 proving time: 424 ms
+	 verification time: 195 ms
+v1, v2 - result : true
+u1, u2 - result : true
+Benchmarking HPA_with_zk with vector length: 16
+1) Pairing hadamard product...
+X == X' : true
+	 proving time: 586 ms
+	 verification time: 252 ms
+v1, v2 - result : true
+u1, u2 - result : true
+Benchmarking HPA_with_zk with vector length: 32
+1) Pairing hadamard product...
+X == X' : true
+	 proving time: 807 ms
+	 verification time: 300 ms
+v1, v2 - result : true
+u1, u2 - result : true
+Benchmarking HPA_with_zk with vector length: 64
+1) Pairing hadamard product...
+X == X' : true
+	 proving time: 1134 ms
+	 verification time: 354 ms
+v1, v2 - result : true
+u1, u2 - result : true
+Benchmarking HPA_with_zk with vector length: 128
+1) Pairing hadamard product...
+X == X' : true
+	 proving time: 1623 ms
+	 verification time: 403 ms
+v1, v2 - result : true
+u1, u2 - result : true
+Benchmarking HPA_with_zk with vector length: 256
+1) Pairing hadamard product...
+X == X' : true
+	 proving time: 2461 ms
+	 verification time: 457 ms
+v1, v2 - result : true
+u1, u2 - result : true
+Benchmarking HPA_with_zk with vector length: 512
+1) Pairing hadamard product...
+X == X' : true
+	 proving time: 4184 ms
+	 verification time: 505 ms
+v1, v2 - result : true
+u1, u2 - result : true
+Benchmarking HPA_with_zk with vector length: 1024
+1) Pairing hadamard product...
+X == X' : true
+	 proving time: 7026 ms
+	 verification time: 558 ms
+v1, v2 - result : true
+u1, u2 - result : true
+Benchmarking HPA_with_zk with vector length: 2048
+1) Pairing hadamard product...
+X == X' : true
+	 proving time: 13633 ms
+	 verification time: 613 ms
+v1, v2 - result : true
+u1, u2 - result : true
