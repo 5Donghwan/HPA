@@ -83,3 +83,10 @@ harness = false
 name = "groth16_aggregation"
 path = "examples/groth16_aggregation.rs"
 
+[[example]]
+name = "hpa"
+path = "examples/hpa.rs"
+
+[[example]]
+name = "hpa_bp"
+path = "examples/hpa_bp.rs"
