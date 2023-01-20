@@ -128,7 +128,7 @@ fn main() {
     // let arg = env::args().nth(1).unwrap();
     // let len: usize =arg.parse().unwrap();
 
-    const LEN: usize = 16;
+    const LEN: usize = 32;
     type CM = PedersenCommitment<<Bls12_381 as PairingEngine>::G1Projective>;
     // type GC1 = AFGHOCommitmentG1<Bls12_381>;
     // type GC2 = AFGHOCommitmentG2<Bls12_381>;
