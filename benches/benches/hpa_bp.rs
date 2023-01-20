@@ -113,7 +113,6 @@ where
     let result = HPA::<IP,CM, D>::verify( (gamma1.clone(), gamma2.clone()),
          (&c, &x, &d1, &d2, &d3), &mut proof, &gm)
         .unwrap();
-    println!("result1 : {}", result);
     let result2 = HPA::<IP, CM, D>::verify( (gamma1.clone(), gamma2.clone()),
     (&c_, &x_, &d1_, &d2_, &d3_), &mut proof_, &gm)
    .unwrap();
@@ -129,7 +128,7 @@ fn main() {
     // let arg = env::args().nth(1).unwrap();
     // let len: usize =arg.parse().unwrap();
 
-    const LEN: usize = 2048;
+    const LEN: usize = 16;
     type CM = PedersenCommitment<<Bls12_381 as PairingEngine>::G1Projective>;
     // type GC1 = AFGHOCommitmentG1<Bls12_381>;
     // type GC2 = AFGHOCommitmentG2<Bls12_381>;

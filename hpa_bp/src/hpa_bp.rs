@@ -82,7 +82,8 @@ where
         (CM::Output, CM::Output, CM::Output, CM::Output),
         (CM::Output, CM::Output, CM::Output, CM::Output),
     )>,
-
+    pub(crate) r_d1_x: Vec<CM::Output>,
+    pub(crate) r_d2_x: Vec<CM::Output>,
 
     pub(crate) e1: Vec<IP::LeftMessage>,
     pub(crate) e2: Vec<IP::RightMessage>,
@@ -527,10 +528,11 @@ where
                 // println!("check");
                 // Verifier's work in reduce
                 let split = gamma1.len() / 2;
-                // println!("{}", split);
 
                 let last_commitment = proof.r_commitment_steps.pop().unwrap();
                 let last_transcript = transcript.pop().unwrap();
+                let last_d1_x = proof.r_d1_x.pop().unwrap();
+                let last_d2_x = proof.r_d2_x.pop().unwrap();
 
                 let c_l = last_commitment.0.0.clone();
                 let c_r = last_commitment.0.1.clone();
@@ -539,10 +541,16 @@ where
                 let x_r = last_commitment.1.1.clone();
                 let x_plus = last_commitment.1.2.clone();
                 let x_minus = last_commitment.1.3.clone();
-                let d1_plus = last_commitment.2.0.clone();
-                let d1_minus = last_commitment.2.1.clone();
-                let d2_plus = last_commitment.2.2.clone();
-                let d2_minus = last_commitment.2.3.clone();
+                let d1_x = last_d1_x.clone();
+                let d1_l = last_commitment.2.0.clone();
+                let d1_r = last_commitment.2.1.clone();
+                let d2_x = last_d2_x.clone();
+                let d2_l = last_commitment.2.2.clone();
+                let d2_r = last_commitment.2.3.clone();
+                // let d1_plus = last_commitment.2.0.clone();
+                // let d1_minus = last_commitment.2.1.clone();
+                // let d2_plus = last_commitment.2.2.clone();
+                // let d2_minus = last_commitment.2.3.clone();
                 let d3_l = last_commitment.3.0.clone();
                 let d3_r = last_commitment.3.1.clone();
                 let d3_plus = last_commitment.3.2.clone();
@@ -556,35 +564,38 @@ where
 
                 let alpha = last_transcript.0;
                 // println!("ver al : {}", alpha);
-                let alpha_inv = last_transcript.1;
+                // let alpha_inv = last_transcript.1;
                 let gm_inv = last_transcript.2;
 
 
                 gamma1 = cfg_iter!(gamma1_l)
-                    .map(|b| mul_helper(b, &alpha_inv))
+                    .map(|b| mul_helper(b, &alpha))
                     .zip(gamma1_r)
                     .map(|(b_1, b_2)| b_1 + b_2.clone())
                     .collect::<Vec<CM::Key>>();
                 gamma2 = cfg_iter!(gamma2_l)
-                    .map(|b| mul_helper(b, &alpha_inv))
+                    .map(|b| mul_helper(b, &alpha))
                     .zip(gamma2_r)
                     .map(|(b_1, b_2)| b_1 + b_2.clone())
                     .collect::<Vec<CM::Key>>();
 
                 assert!(c_prime == c_l.clone() + c_r.clone());
                 assert!(x_prime == x_l.clone() + x_r.clone());
+                assert!(d1_prime == d1_l.clone() + d1_r.clone());
+                assert!(d2_prime == d2_l.clone() + d2_r.clone());
                 assert!(d3_prime == d3_l.clone() + d3_r.clone());
-
 
                 let alpha_sqr = alpha * alpha;
                 let alpha_gm_inv = alpha * gm_inv;
-                let alpha_inv_gm_inv = alpha_inv * gm_inv;
+                // let alpha_inv_gm_inv = alpha_inv * gm_inv;
 
                 c_prime = mul_helper(&c_l, &alpha_sqr) + c_r + mul_helper(&c_x, &alpha);
                 x_prime = mul_helper(&x_l, &alpha_sqr) + mul_helper(&x_r, &gm_inv) + mul_helper(&x_plus, &alpha) + mul_helper(&x_minus, &alpha_gm_inv);
-                d1_prime = d1_prime + mul_helper(&d1_plus, &alpha) + mul_helper(&d1_minus, &alpha_inv);
-                d2_prime = d2_prime + mul_helper(&d2_plus, &alpha) + mul_helper(&d2_minus, &alpha_inv);
-                d3_prime = d3_l + mul_helper(&d3_r, &gm_inv) + mul_helper(&d3_plus, &alpha) + mul_helper(&d3_minus, &alpha_inv_gm_inv);
+                d1_prime = mul_helper(&d1_l, &alpha_sqr) + d1_r + mul_helper(&d1_x, &alpha);
+                // d1_prime = d1_prime + mul_helper(&d1_plus, &alpha) + mul_helper(&d1_minus, &alpha_inv);
+                d2_prime = mul_helper(&d2_l, &alpha_sqr) + d2_r + mul_helper(&d2_x, &alpha);
+                // d2_prime = d2_prime + mul_helper(&d2_plus, &alpha) + mul_helper(&d2_minus, &alpha_inv);
+                d3_prime = mul_helper(&d3_l, &alpha_sqr) + mul_helper(&d3_r, &gm_inv) + mul_helper(&d3_plus, &alpha) + mul_helper(&d3_minus, &alpha_gm_inv);
 
                 // Scalar product
                 if i == round - 1 {
@@ -626,7 +637,6 @@ where
                     if temp_left == temp_right {
                         result3 = true;
                     }
-
 
                     // let ch_d = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
                     // let ch_d_inv = ch_d.inverse().unwrap();
@@ -768,6 +778,8 @@ where
         let (mut gamma1_message, mut gamma2_message) = ck_message.clone();
         let mut r_commitment_steps = Vec::new();
         let mut r_transcript = Vec::new();
+        let mut r_d1_x = Vec::new();
+        let mut r_d2_x = Vec::new();
         assert!(v1.len().is_power_of_two());
 
         let mut r_c = witness.0.clone();
@@ -824,10 +836,16 @@ where
                 let x_r = IP::inner_product(&w_vec_r, &v2_r).unwrap() + r_xr.clone();
                 let x_plus = IP::inner_product(&w_vec_l, &v2_r).unwrap() + r_x_plus.clone();
                 let x_minus = IP::inner_product(&w_vec_r, &v2_l).unwrap() + r_x_minus.clone();
-                let d1_plus = CM::commit(&gamma1_r, &v1_l).unwrap();
-                let d1_minus = CM::commit(&gamma1_l, &v1_r).unwrap();
-                let d2_plus = CM::commit(&gamma2_r, &v2_l).unwrap();
-                let d2_minus = CM::commit(&gamma2_l, &v2_r).unwrap();
+                let d1_l = CM::commit(&gamma1_l, &v1_l).unwrap();
+                let d1_r = CM::commit(&gamma1_r, &v1_r).unwrap();
+                let d1_x = CM::commit(&gamma1_l, &v1_r).unwrap() + CM::commit(&gamma1_r, &v1_l).unwrap();
+                // let d1_plus = CM::commit(&gamma1_r, &v1_l).unwrap();
+                // let d1_minus = CM::commit(&gamma1_l, &v1_r).unwrap();
+                let d2_l = CM::commit(&gamma2_l, &v2_l).unwrap();
+                let d2_r = CM::commit(&gamma2_r, &v2_r).unwrap();
+                let d2_x = CM::commit(&gamma2_l, &v2_r).unwrap() + CM::commit(&gamma2_r, &v2_l).unwrap();
+                // let d2_plus = CM::commit(&gamma2_r, &v2_l).unwrap();
+                // let d2_minus = CM::commit(&gamma2_l, &v2_r).unwrap();
                 let d3_l = CM::commit(&gamma1_l, &w_vec_l).unwrap();
                 let d3_r = CM::commit(&gamma1_r, &w_vec_r).unwrap();
                 let d3_plus = CM::commit(&gamma1_r, &w_vec_l).unwrap();
@@ -843,8 +861,9 @@ where
                     hash_input.extend_from_slice(&counter_nonce.to_be_bytes()[..]);
                     //TODO: Should use CanonicalSerialize instead of ToBytes
                     hash_input.extend_from_slice(&to_bytes![
-                        c_l, c_r, c_x, x_l, x_r, x_plus, x_minus,
-                        d1_plus, d1_minus, d2_plus, d2_minus,
+                        c_l, c_r, c_x, 
+                        x_l, x_r, x_plus, x_minus,
+                        d1_l, d1_r, d2_l, d2_r,
                         d3_l, d3_r, d3_plus, d3_minus
                     ]?);
                     let alpha: CM::Scalar = u128::from_be_bytes(
@@ -909,12 +928,12 @@ where
 
 
                 gamma1_message = cfg_iter!(gamma1_l)
-                    .map(|b| mul_helper(b, &alpha_inv))
+                    .map(|b| mul_helper(b, &alpha))
                     .zip(gamma1_r)
                     .map(|(b_1, b_2)| b_1 + b_2.clone())
                     .collect::<Vec<CM::Key>>();
                 gamma2_message = cfg_iter!(gamma2_l)
-                    .map(|b| mul_helper(b, &alpha_inv))
+                    .map(|b| mul_helper(b, &alpha))
                     .zip(gamma2_r)
                     .map(|(b_1, b_2)| b_1 + b_2.clone())
                     .collect::<Vec<CM::Key>>();
@@ -922,11 +941,13 @@ where
 
                 let com1 = (c_l, c_r, c_x.clone(), c_x.clone());
                 let com2 = (x_l, x_r, x_plus, x_minus);
-                let com3 = (d1_plus, d1_minus, d2_plus, d2_minus);
+                let com3 = (d1_l, d1_r, d2_l, d2_r);
                 let com4 = (d3_l, d3_r, d3_plus, d3_minus);
 
                 r_commitment_steps.push((com1, com2, com3, com4));
                 r_transcript.push((alpha, alpha_inv, gm_inv));
+                r_d1_x.push(d1_x);
+                r_d2_x.push(d2_x);
 
                 end_timer!(recurse);
             }
@@ -989,11 +1010,14 @@ where
         
         // r_transcript.reverse();
         r_commitment_steps.reverse();
+        r_d1_x.reverse();
+        r_d2_x.reverse();
 
         Ok((
             HPAProof {
                 r_commitment_steps,
-
+                r_d1_x,
+                r_d2_x,
                 e1: e1_vec, 
                 e2: e2_vec,
                 q1, q2, q3, q4,
@@ -1039,8 +1063,12 @@ where
             let (alpha, alpha_inv) = 'challenge: loop {
                 let mut hash_input = Vec::new();
                 hash_input.extend_from_slice(&counter_nonce.to_be_bytes()[..]);
-                hash_input.extend_from_slice(&to_bytes![com_1.0, com_1.1, com_1.2, com_2.0, com_2.1, com_2.2, com_2.3,
-                    com_3.0, com_3.1, com_3.2, com_3.3, com_4.0, com_4.1, com_4.2, com_4.3]?);
+                hash_input.extend_from_slice(&to_bytes![
+                    com_1.0, com_1.1, com_1.2,
+                    com_2.0, com_2.1, com_2.2, com_2.3,
+                    com_3.0, com_3.1, com_3.2, com_3.3,
+                    com_4.0, com_4.1, com_4.2, com_4.3
+                ]?);
                 let alpha: CM::Scalar = u128::from_be_bytes(
                     D::digest(&hash_input).as_slice()[0..16].try_into().unwrap(),
                 )
@@ -1160,6 +1188,8 @@ where
     fn clone(&self) -> Self {
         HPAProof {
             r_commitment_steps: self.r_commitment_steps.clone(),
+            r_d1_x: self.r_d1_x.clone(),
+            r_d2_x: self.r_d2_x.clone(),
             // c_x: self.c_x.clone(),
             // x_plus: self.x_plus.clone(),
             // x_minus: self.x_minus.clone(),
