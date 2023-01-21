@@ -32,6 +32,7 @@ ark-dh-commitments = { path = "../dh_commitments" }
 ark-dory_with_zk = {path = "../dory_with_zk"}
 ark-hpa = {path = "../hpa"}
 ark-hpa-bp = {path = "../hpa_bp"}
+ark-ghpa-afgho = {path = "../ghpa_afgho"}
 
 
 [[bench]]
@@ -77,6 +78,11 @@ harness = false
 [[bench]]
 name = "groth16_aggregation"
 path = "benches/groth16_aggregation/bench.rs"
+harness = false
+
+[[bench]]
+name = "ghpa_afgho"
+path = "benches/ghpa_afgho.rs"
 harness = false
 
 [[example]]

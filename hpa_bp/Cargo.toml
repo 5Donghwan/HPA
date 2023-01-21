@@ -2,11 +2,6 @@
 name = "ark-hpa-bp"
 version = "0.3.0"
 authors = [
-    "Benedikt Bünz",
-    "Mary Maller",
-    "Pratyush Mishra",
-    "Nirvan Tyagi",
-    "Psi Vesely",
     "Hankyung Ko",
 ]
 

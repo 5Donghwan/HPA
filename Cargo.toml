@@ -9,5 +9,6 @@ members = [
   "dory",
   "dory_with_zk",
   "hpa",
-  "hpa_bp", 
+  "hpa_bp",
+  "ghpa_afgho" 
 ]
