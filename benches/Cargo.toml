@@ -66,8 +66,18 @@ path = "benches/hpa.rs"
 harness = false
 
 [[bench]]
+name = "hpa_batch"
+path = "benches/hpa_batch.rs"
+harness = false
+
+[[bench]]
 name = "hpa_bp"
 path = "benches/hpa_bp.rs"
+harness = false
+
+[[bench]]
+name = "hpa_bp_batch"
+path = "benches/hpa_bp_batch.rs"
 harness = false
 
 [[bench]]
@@ -88,11 +98,6 @@ harness = false
 [[bench]]
 name = "ghpa_afgho_batch"
 path = "benches/ghpa_afgho_batch.rs"
-harness = false
-
-[[bench]]
-name = "hpa_bp_batch"
-path = "benches/hpa_bp_batch.rs"
 harness = false
 
 [[example]]

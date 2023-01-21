@@ -402,6 +402,91 @@ where
         ))
     }
 
+pub fn batch_commit<R: Rng>(
+        r_c: &LMC::Scalar, r_x: &LMC::Scalar, r_y:&LMC::Scalar,
+        r_d1: &LMC::Scalar, r_d2: &LMC::Scalar, r_d3: &LMC::Scalar, r_d4: &LMC::Scalar,
+        v1: &Vec<IP::LeftMessage>, u1: &Vec<IP::LeftMessage>,
+        v2: &Vec<IP::RightMessage>, u2: &Vec<IP::RightMessage>,
+        w_vec: &Vec<IP::LeftMessage>, w_vec_: &Vec<IP::LeftMessage>,
+        k_vec: &Vec<IP::LeftMessage>, k_vec_: &Vec<IP::LeftMessage>,
+        h1: &Vec<IP::LeftMessage>, h2: &Vec<IP::RightMessage>,
+        rng: &mut R,
+    ) -> Result<
+        (
+            IP::Output,
+            IP::Output,
+            IP::Output,
+            Vec<IP::LeftMessage>,
+            Vec<IP::RightMessage>,
+            LMC::Scalar, LMC::Scalar, LMC::Scalar,
+            LMC::Scalar, LMC::Scalar, LMC::Scalar, LMC::Scalar,
+            Vec<IP::LeftMessage>,
+            Vec<IP::LeftMessage>,
+            LMC::Scalar,
+            // z_c, z_x, z_y, v1, v2, r_c, r_x, r_y, r_d1, r_d2, r_d3, r_d4, w_vec, k_vec, delta
+        ),
+        Error,
+    > {
+        let ht = IP::inner_product(&h1, &h2).unwrap();
+
+        let r_zc = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        let r_zx = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        let r_zy = <LMC as DoublyHomomorphicCommitment>::Scalar::rand(rng);
+        
+        let z_c = IP::inner_product(&v1, &u2).unwrap() + IP::inner_product(&u1, &v2).unwrap() + mul_helper(&ht, &r_zc);
+        let z_x = IP::inner_product(&w_vec, &u2).unwrap() + IP::inner_product(&w_vec_, &v2).unwrap() + mul_helper(&ht, &r_zx);
+        let z_y = IP::inner_product(&k_vec, &u2).unwrap() + IP::inner_product(&k_vec_, &v2).unwrap() + mul_helper(&ht, &r_zy);
+
+
+        let delta = 'challenge: loop {
+            let mut hash_input = Vec::new();
+            //TODO: Should use CanonicalSerialize instead of ToBytes
+            hash_input.extend_from_slice(&to_bytes![z_c, z_x]?);
+            let delta: LMC::Scalar =
+                u128::from_be_bytes(D::digest(&hash_input).as_slice()[0..16].try_into().unwrap())
+                    .into();
+            break 'challenge delta;
+        };
+        let delta_sqr = delta * delta;
+
+        let mut bat_v1 = Vec::new();
+        let mut bat_v2 = Vec::new();
+        let mut bat_w_vec = Vec::new();
+        let mut bat_k_vec = Vec::new();
+
+        for i in 0..v1.len(){
+            bat_v1.push(mul_helper(&v1[i], &delta) + u1[i].clone());
+        }
+        for i in 0..v1.len(){
+            bat_v2.push(mul_helper(&v2[i], &delta) + u2[i].clone());
+        }
+        for i in 0..v1.len(){
+            bat_w_vec.push(mul_helper(&w_vec[i], &delta) + w_vec_[i].clone());
+        }
+        for i in 0..v1.len(){
+            bat_k_vec.push(mul_helper(&k_vec[i], &delta) + k_vec_[i].clone());
+        }
+
+        let bat_r_c = delta_sqr * r_c + delta * r_zc + r_c;
+        let bat_r_x = delta_sqr * r_x.clone() + delta * r_zx + r_x;
+        let bat_r_y = delta_sqr * r_y.clone() + delta * r_zx + r_y;
+        let bat_r_d1 = delta * r_d1 + r_d1;
+        let bat_r_d2 = delta * r_d2 + r_d2;
+        let bat_r_d3 = delta * r_d3 + r_d3;
+        let bat_r_d4 = delta * r_d4 + r_d4;
+
+
+        Ok((
+            z_c, z_x, z_y, 
+            bat_v1, bat_v2, 
+            bat_r_c, bat_r_x, bat_r_y, 
+            bat_r_d1, bat_r_d2, bat_r_d3, bat_r_d4, 
+            bat_w_vec, bat_k_vec, 
+            delta
+        ))
+    }
+
+
     pub fn setup<R: Rng>(
         rng: &mut R,
         size: usize,
@@ -1221,7 +1306,51 @@ where
         Ok((r_transcript, ch_c))
     }
 
-  
+  pub fn batch_verify(
+        c: &IP::Output,
+        c_: &IP::Output,
+        x: &IP::Output,
+        x_: &IP::Output,
+        y: &IP::Output,
+        y_: &IP::Output,
+        d1: &IP::Output,
+        d1_: &IP::Output,
+        d2: &IP::Output,
+        d2_: &IP::Output,
+        d3: &IP::Output,
+        d3_: &IP::Output,
+        d4: &IP::Output,
+        d4_: &IP::Output,
+        z_c: &IP::Output,
+        z_x: &IP::Output,
+        z_y: &IP::Output,
+        delta: &LMC::Scalar,
+    ) -> Result<
+        (
+            IP::Output,
+            IP::Output,
+            IP::Output,
+            IP::Output,
+            IP::Output,
+            IP::Output,
+            IP::Output,
+            // c, x, y, d1, d2, d3, d4
+        ),
+        Error,
+    > {
+
+        let delta = delta.clone();
+        let delta_sqr = delta * delta;
+        let bat_c = mul_helper(c, &delta_sqr) + mul_helper(z_c, &delta) + c_.clone();
+        let bat_x = mul_helper(x, &delta_sqr) + mul_helper(z_x, &delta) + x_.clone();
+        let bat_y = mul_helper(y, &delta_sqr) + mul_helper(z_y, &delta) + y_.clone();
+        let bat_d1 = mul_helper(d1, &delta) + d1_.clone();
+        let bat_d2 = mul_helper(d2, &delta) + d2_.clone();
+        let bat_d3 = mul_helper(d3, &delta) + d3_.clone();
+        let bat_d4 = mul_helper(d4, &delta) + d4_.clone();
+
+        Ok((bat_c, bat_x, bat_y, bat_d1, bat_d2, bat_d3, bat_d4))
+    }
 
 }
 

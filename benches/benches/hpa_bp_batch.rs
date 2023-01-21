@@ -16,7 +16,7 @@ use ark_std::rand::{rngs::StdRng, Rng, SeedableRng};
 use blake2::Blake2b;
 use digest::Digest;
 
-use std::time::Instant; //, env,ops::MulAssign};
+use std::{time::Instant, env}; //, env,ops::MulAssign};
 
 
 // fn bench_hpa_bp<IP, LMC, RMC, IPC, P, D, R: Rng>(rng: &mut R, len: usize)
@@ -152,10 +152,10 @@ where
 
 
 fn main() { 
-    // let arg = env::args().nth(1).unwrap();
-    // let len: usize =arg.parse().unwrap();
+    let arg = env::args().nth(1).unwrap();
+    let LEN: usize =arg.parse().unwrap();
 
-    const LEN: usize = 32;
+    // const LEN: usize = 32;
     type CM = PedersenCommitment<<Bls12_381 as PairingEngine>::G1Projective>;
     // type GC1 = AFGHOCommitmentG1<Bls12_381>;
     // type GC2 = AFGHOCommitmentG2<Bls12_381>;
