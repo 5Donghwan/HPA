@@ -81,6 +81,7 @@ where
     let bool_x = x == x_;
     println!("X == X' : {}", bool_x);   
 
+    let mut start = Instant::now();
     let (z_c, z_x, 
         bat_v1, bat_v2,
         bat_r_c, bat_r_x, 
@@ -95,11 +96,13 @@ where
             rng
         ).unwrap();
 
+        let mut bench = start.elapsed().as_millis();
+        println!("\t batching time: {} ms", bench);
     // let mut hpa_srs = HPA::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone())), &h1, &h2).unwrap();
     // let mut hpa_srs_ = HPA::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone())), &h1, &h2).unwrap();
 
 
-    let mut start = Instant::now();
+    start = Instant::now();
     let mut bat_proof =
         HPA::<IP, LMC, RMC, IPC, D>::prove((&(bat_v1.clone()), &(bat_v2.clone()), &(bat_w_vec.clone())),
         //  &hpa_srs, 
@@ -122,7 +125,7 @@ where
     //         &h1, &h2,
     //         rng
     //     ).unwrap();
-    let mut bench = start.elapsed().as_millis();
+    bench = start.elapsed().as_millis();
     println!("\t proving time: {} ms", bench);
 
 
