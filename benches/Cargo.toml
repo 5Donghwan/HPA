@@ -90,6 +90,11 @@ name = "ghpa_afgho_batch"
 path = "benches/ghpa_afgho_batch.rs"
 harness = false
 
+[[bench]]
+name = "hpa_bp_batch"
+path = "benches/hpa_bp_batch.rs"
+harness = false
+
 [[example]]
 name = "groth16_aggregation"
 path = "examples/groth16_aggregation.rs"
