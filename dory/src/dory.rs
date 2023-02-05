@@ -80,7 +80,7 @@ where
 }
 
 
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct DORYSRS<IP, LMC, RMC, IPC, D>
 where
     D: Digest,
@@ -743,6 +743,36 @@ where
             e1: self.e1.clone(),
             e2: self.e2.clone(),
             // r_base: self.r_base.clone(),
+            _dory: PhantomData,
+        }
+    }
+}
+
+impl<IP, LMC, RMC, IPC, D> Clone for DORYSRS<IP, LMC, RMC, IPC, D>
+where
+    D: Digest,
+    IP: InnerProduct<
+        LeftMessage = LMC::Message,
+        RightMessage = RMC::Message,
+        Output = IPC::Message,
+    >,
+    LMC: DoublyHomomorphicCommitment,
+    RMC: DoublyHomomorphicCommitment<Scalar = LMC::Scalar>,
+    IPC: DoublyHomomorphicCommitment<Scalar = LMC::Scalar>,
+    RMC::Message: MulAssign<LMC::Scalar>,
+    IPC::Message: MulAssign<LMC::Scalar>,
+    RMC::Key: MulAssign<LMC::Scalar>,
+    IPC::Key: MulAssign<LMC::Scalar>,
+    RMC::Output: MulAssign<LMC::Scalar>,
+    IPC::Output: MulAssign<LMC::Scalar>,
+{
+    fn clone(&self) -> Self {
+        DORYSRS {
+            delta1_l: self.delta1_l.clone(),
+            delta1_r: self.delta1_r.clone(),
+            delta2_l: self.delta2_l.clone(),
+            delta2_r: self.delta2_r.clone(),
+            kai: self.kai.clone(),
             _dory: PhantomData,
         }
     }

@@ -16,7 +16,7 @@ use ark_std::rand::{rngs::StdRng, Rng, SeedableRng};
 use blake2::Blake2b;
 use digest::Digest;
 
-use std::{ops::MulAssign, time::Instant}; //, env};
+use std::{ops::MulAssign, time::Instant, env}; //, env};
 
 
 
@@ -128,10 +128,10 @@ where
 
 
 fn main() { 
-    // let arg = env::args().nth(1).unwrap();
-    // let len: usize =arg.parse().unwrap();
+    let arg = env::args().nth(1).unwrap();
+    let LEN: usize =arg.parse().unwrap();
 
-    const LEN: usize = 32;
+    // const LEN: usize = 32;
     type GC1 = AFGHOCommitmentG1<Bls12_381>;
     type GC2 = AFGHOCommitmentG2<Bls12_381>;
     let mut rng = StdRng::seed_from_u64(0u64);

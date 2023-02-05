@@ -33,6 +33,7 @@ ark-dory_with_zk = {path = "../dory_with_zk"}
 ark-hpa = {path = "../hpa"}
 ark-hpa-bp = {path = "../hpa_bp"}
 ark-ghpa-afgho = {path = "../ghpa_afgho"}
+ark-mv-product = {path = "../mv_product"}
 
 
 [[bench]]
@@ -98,6 +99,11 @@ harness = false
 [[bench]]
 name = "ghpa_afgho_batch"
 path = "benches/ghpa_afgho_batch.rs"
+harness = false
+
+[[bench]]
+name = "mv_product"
+path = "benches/mv_product.rs"
 harness = false
 
 [[example]]
