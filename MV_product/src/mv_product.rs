@@ -1,9 +1,9 @@
 extern crate ark_ff;
-use self::ark_ff::Zero;
+use self::ark_ff::{Zero, UniformRand};
 // extern crate ark_serialize;
 // use self::ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Read, SerializationError, Write};
-// extern crate ark_std;
-// use self::ark_std::rand::Rng;
+extern crate ark_std;
+use self::ark_std::rand::Rng;
 // use self::ark_std::{end_timer, start_timer};
 extern  crate digest;
 use self::digest::Digest;
@@ -183,13 +183,37 @@ where
         for i in 0..size{
             let mut temp = mul_helper(&generator_g2, &zero);
             for j in 0..size{
-                let temp2 = mul_helper(&gamma2[j], &matrix_a[j*size+i]);
-                temp = temp + temp2;
+                if matrix_a[j*size + i] != zero{
+                    let temp2 = mul_helper(&gamma2[j], &matrix_a[j*size+i]);
+                    temp = temp + temp2;
+                }
             }
             v_a.push(temp);
         }
 
         Ok(v_a)
+    }
+
+    // set sparse matrix
+    pub fn set_sparse_matrix<R: Rng>(
+        rng: &mut R,
+        size: usize,
+    ) -> Result<Vec<LMC::Scalar>, Error> {
+    let mut matrix_a = Vec::new();
+    for i in 0..size{
+        for j in 0..size{
+            if i == j {
+                matrix_a.push(<LMC::Scalar>::rand(rng));
+            }
+            else{
+                matrix_a.push(<LMC::Scalar>::zero());
+            }
+        }
+    }
+
+    Ok(
+        matrix_a
+    )
     }
 
     // generator_g^vec_a
