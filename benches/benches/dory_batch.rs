@@ -13,7 +13,6 @@ use ark_inner_products::{
 use ark_dory::dory::{
     DORY,
 };
-use ark_mv_product::mv_product::MVP;
 
 use ark_std::rand::{rngs::StdRng, Rng, SeedableRng};
 use blake2::Blake2b;
@@ -21,7 +20,7 @@ use digest::Digest;
 
 use std::{ops::MulAssign, time::Instant};
 
-fn bench_mvp<IP, LMC, RMC, IPC, P, D, R: Rng>(rng: &mut R, len: usize)
+fn bench_dory<IP, LMC, RMC, IPC, P, D, R: Rng>(rng: &mut R, len: usize)
 where
     D: Digest,
     P: PairingEngine,
@@ -48,51 +47,36 @@ where
     // IPC::Message: AddAssign<RMC::Output>,
     // RMC::Output: AddAssign<LMC::Output>,
 {
-    let (gamma2, gamma1) = DORY::<IP,LMC,RMC,IPC, D>::setup(rng, len).unwrap();
+    let mut l = Vec::new(); 
+    let mut r = Vec::new();
 
-    // set matrix_a_trans : n*n length vector...
-    // let mut matrix_a = Vec::new();
-    let matrix_a = MVP::<IP,LMC, RMC, IPC, D>::set_sparse_matrix(rng, len).unwrap();
-
-    // for _ in 0..len*len{
-    //     matrix_a.push(<LMC::Scalar>::rand(rng));
-    // }
-    
-    // set z vector
-    let mut z = Vec::new();
-    for _ in 0..len{
-        z.push(<LMC::Scalar>::rand(rng));
+    let mut l_ = Vec::new(); 
+    let mut r_ = Vec::new();
+  
+    for _ in 0..len {
+        l.push(<IP::LeftMessage>::rand(rng));
+        r.push(<IP::RightMessage>::rand(rng));
+        l_.push(<IP::LeftMessage>::rand(rng));
+        r_.push(<IP::RightMessage>::rand(rng));
     }
 
-    let generator_g1 = <IP::LeftMessage>::rand(rng);
-    let generator_g2 = <IP::RightMessage>::rand(rng);
+    let (gamma2, gamma1) = DORY::<IP,LMC,RMC,IPC, D>::setup(rng, len).unwrap();
+    let d1 = IP::inner_product(&l, &gamma2).unwrap();
+    let d2 = IP::inner_product(&gamma1, &r).unwrap();
+    let c = IP::inner_product(&l, &r).unwrap();
+
+    let d1_ = IP::inner_product(&l_, &gamma2).unwrap();
+    let d2_ = IP::inner_product(&gamma1, &r_).unwrap();
+    let c_ = IP::inner_product(&l_, &r_).unwrap();
 
     let mut start = Instant::now();
-    let v_a = MVP::<IP, LMC, RMC, IPC, D>::collapse_matrix(&matrix_a, &gamma2, &generator_g2, len).unwrap();
-    let mut bench = start.elapsed().as_millis();
-    println!("\t matrix collapsing time: {} ms", bench);
-
-    let z_vec = MVP::<IP, LMC, RMC, IPC, D>::set_vector(&z, &generator_g1).unwrap();
-    let a = MVP::<IP, LMC, RMC, IPC, D>::compute_az(&matrix_a, &z).unwrap();
-    let a_vec = MVP::<IP, LMC, RMC, IPC, D>::set_vector(&a, &generator_g1).unwrap();
-
-
-    let d1 = IP::inner_product(&z_vec, &gamma2).unwrap();
-    let d2 = IP::inner_product(&gamma1, &v_a).unwrap();
-    let c = IP::inner_product(&z_vec, &v_a).unwrap();
-    
-    let d1_ = IP::inner_product(&a_vec, &gamma2).unwrap();
-    let d2_ = IP::inner_product(&gamma1, &gamma2).unwrap();
-    let c_ = IP::inner_product(&a_vec, &gamma2).unwrap();
-
-    start = Instant::now();
     let (x, bat_l, bat_r, delta) 
         = DORY::<IP, LMC, RMC, IPC, D>::batch_commit(
-            &z_vec.clone(), &v_a.clone(),
-            &a_vec.clone(), &gamma2.clone(), 
+            &l, &r,
+            &l_, &r_, 
             // rng
         ).unwrap();
-    bench = start.elapsed().as_millis();
+    let mut bench = start.elapsed().as_millis();
     println!("\t batching time: {} ms", bench);
 
     let (bat_c, bat_d1, bat_d2)
@@ -104,6 +88,7 @@ where
             &delta
         ).unwrap();
 
+
     let dory_srs = DORY::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone()))).unwrap();
     start = Instant::now();
     let mut proof =
@@ -112,41 +97,38 @@ where
          (&(gamma1.clone()), &(gamma2.clone())), 
          (&(bat_d1.clone()), &(bat_d2.clone()), &(bat_c.clone()))
         ).unwrap();
-    bench = start.elapsed().as_millis();
-    println!("\t proving time: {} ms", bench);
     // let mut proof_ =
-    //     DORY::<IP, LMC, RMC, IPC, D>::prove((&(a_vec.clone()), &(gamma2.clone())),
+    //     DORY::<IP, LMC, RMC, IPC, D>::prove((&(l_.clone()), &(r_.clone())),
     //     //  (&(gamma1.clone()), &(gamma2.clone())), 
     //      (&(gamma1.clone()), &(gamma2.clone())), 
     //      (&(d1_.clone()), &(d2_.clone()), &(c_.clone()))
     //     ).unwrap();
-    
+    bench = start.elapsed().as_millis();
+    println!("\t proving time: {} ms", bench);
     start = Instant::now();
-    let eq_c = c == c_;
     let result = DORY::<IP, LMC, RMC, IPC, D>::verify(&mut dory_srs.clone(), (&(gamma1.clone()), &(gamma2.clone())),
          (&(bat_d1.clone()), &(bat_d2.clone()), &(bat_c.clone())), &mut proof)
         .unwrap();
+    // let result_ = DORY::<IP, LMC, RMC, IPC, D>::verify(&mut dory_srs, (&(gamma1.clone()), &(gamma2.clone())),
+    //     (&(d1_.clone()), &(d2_.clone()), &(c_.clone())), &mut proof_)
+    //    .unwrap();
+  
     bench = start.elapsed().as_millis();
     println!("\t verification time: {} ms", bench);
-    // let result_ = DORY::<IP, LMC, RMC, IPC, D>::verify(&mut dory_srs.clone(), (&(gamma1.clone()), &(gamma2.clone())),
-    //      (&(d1_.clone()), &(d2_.clone()), &(c_.clone())), &mut proof_)
-    //     .unwrap();
-    
-    println!("C == C' : {}", eq_c);
     println!("result : {}", result);
 }
 
 
 fn main() {
-    const LEN: usize = 32;
+    const LEN: usize = 16;
     type GC1 = AFGHOCommitmentG1<Bls12_381>;
     type GC2 = AFGHOCommitmentG2<Bls12_381>;
     let mut rng = StdRng::seed_from_u64(0u64);
 
-    println!("Benchmarking MV-product with matrix size: {} * {}, vector length: {}", LEN, LEN, LEN);
+    println!("Benchmarking TIPA with vector length: {}", LEN);
 
     println!("1) Pairing inner product...");
-    bench_mvp::<
+    bench_dory::<
         PairingInnerProduct<Bls12_381>,
         GC1,
         GC2,

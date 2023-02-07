@@ -170,6 +170,76 @@ where
         ))
     }
 
+    pub fn batch_commit(
+        l: &Vec<IP::LeftMessage>, r: &Vec<IP::RightMessage>,
+        l_: &Vec<IP::LeftMessage>, r_: &Vec<IP::RightMessage>,
+        // rng: &mut R,
+    ) -> Result<
+        (
+            IP::Output,
+            Vec<IP::LeftMessage>,
+            Vec<IP::RightMessage>,
+            LMC::Scalar,
+            // x, bat_l, bat_r, delta
+        ),
+        Error,
+    > {        
+        let x = IP::inner_product(&l, &r_).unwrap() + IP::inner_product(&l_, &r).unwrap();
+
+        let delta = 'challenge: loop {
+            let mut hash_input = Vec::new();
+            //TODO: Should use CanonicalSerialize instead of ToBytes
+            hash_input.extend_from_slice(&to_bytes![x]?);
+            let delta: LMC::Scalar =
+                u128::from_be_bytes(D::digest(&hash_input).as_slice()[0..16].try_into().unwrap())
+                    .into();
+            break 'challenge delta;
+        };
+        // let delta_sqr = delta * delta;
+
+        let mut bat_l = Vec::new();
+        let mut bat_r = Vec::new();
+
+        for i in 0..l.len(){
+            bat_l.push(mul_helper(&l[i], &delta) + l_[i].clone());
+        }
+        for i in 0..l.len(){
+            bat_r.push(mul_helper(&r[i], &delta) + r_[i].clone());
+        }        
+
+        Ok((
+            x, bat_l, bat_r, delta
+        ))
+    }
+
+    pub fn batch_verify(
+        c: &IP::Output,
+        c_: &IP::Output,
+        d1: &IP::Output,
+        d1_: &IP::Output,
+        d2: &IP::Output,
+        d2_: &IP::Output,
+        x: &IP::Output,
+        delta: &LMC::Scalar,
+    ) -> Result<
+        (
+            IP::Output,
+            IP::Output,
+            IP::Output,
+            // c, d1, d2
+        ),
+        Error,
+    > {
+
+        let delta = delta.clone();
+        let delta_sqr = delta * delta;
+        let bat_c = mul_helper(c, &delta_sqr) + mul_helper(x, &delta) + c_.clone();
+        let bat_d1 = mul_helper(d1, &delta) + d1_.clone();
+        let bat_d2 = mul_helper(d2, &delta) + d2_.clone();
+
+        Ok((bat_c, bat_d1, bat_d2))
+    }
+
     pub fn precompute(
         ck_message: (&[LMC::Message], &[RMC::Message]),
     ) -> Result<DORYSRS<IP,LMC,RMC,IPC,D>, Error> {
