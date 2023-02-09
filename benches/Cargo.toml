@@ -111,6 +111,11 @@ name = "mv_product"
 path = "benches/mv_product.rs"
 harness = false
 
+[[bench]]
+name = "mv_product2"
+path = "benches/mv_product2.rs"
+harness = false
+
 [[example]]
 name = "groth16_aggregation"
 path = "examples/groth16_aggregation.rs"

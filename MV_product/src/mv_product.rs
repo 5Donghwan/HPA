@@ -199,6 +199,45 @@ where
         Ok(v_a)
     }
 
+    // collapse_matrix(&matrix_a, &gamma2)
+    pub fn collapse_matrix1(
+        matrix_a: &[<LMC as DoublyHomomorphicCommitment>::Scalar],
+        // r: &[<LMC as DoublyHomomorphicCommitment>::Scalar],
+        gamma1: &[IP::LeftMessage],
+        // generator_g2: &IP::RightMessage,
+        size: usize,
+    ) -> Result<
+            // Vec<IP::LeftMessage>,
+            // Vec<IP::RightMessage>,
+            // Vec<IP::LeftMessage>,
+            Vec<IP::LeftMessage>
+        , Error >
+    {
+        let matrix_a = matrix_a.clone();
+        let gamma1 = gamma1.clone();
+        // let generator_g2 = generator_g2.clone();
+        let mut v_a = Vec::new();
+        // let zero = <LMC::Scalar>::zero();
+
+        // for i in 0..size{
+        //     let mut temp = mul_helper(&generator_g2, &zero);
+        //     for j in 0..size{
+        //         if matrix_a[j*size + i] != zero{
+        //             let temp2 = mul_helper(&gamma2[j], &matrix_a[j*size+i]);
+        //             temp = temp + temp2;
+        //         }
+        //     }
+        //     v_a.push(temp);
+        // }
+
+        for i in 0..size{
+            let temp = mul_helper(&gamma1[i], &matrix_a[i]);
+            v_a.push(temp);
+        }
+
+        Ok(v_a)
+    }
+
     // set sparse matrix
     pub fn set_sparse_matrix<R: Rng>(
         rng: &mut R,
@@ -245,6 +284,34 @@ where
 
         for i in 0..vec.len(){
             a_vec.push(mul_helper(&generator_g1, &vec[i]));
+        }
+
+        Ok(a_vec)
+    }
+
+    pub fn set_vector2(
+        vec: &[<LMC as DoublyHomomorphicCommitment>::Scalar],
+        // r: &[<LMC as DoublyHomomorphicCommitment>::Scalar],
+        // generator_g1: &IP::LeftMessage,
+        generator_g2: &IP::RightMessage,
+        // size: usize,
+    ) -> Result<
+            // Vec<IP::LeftMessage>,
+            // Vec<IP::RightMessage>,
+            // Vec<IP::LeftMessage>,
+            Vec<IP::RightMessage>
+        , Error >
+    {
+        let vec = vec.clone();
+        let generator_g2 = generator_g2.clone();
+
+        // let matrix_a = matrix_a.clone();
+        // let generator_g2 = generator_g2.clone();
+        let mut a_vec = Vec::new();
+        // let zero = <LMC as DoublyHomomorphicCommitment::Scalar>::zero();
+
+        for i in 0..vec.len(){
+            a_vec.push(mul_helper(&generator_g2, &vec[i]));
         }
 
         Ok(a_vec)

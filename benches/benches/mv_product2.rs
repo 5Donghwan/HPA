@@ -69,32 +69,32 @@ where
         z.push(<LMC::Scalar>::rand(rng));
     }
 
-    let generator_g1 = <IP::LeftMessage>::rand(rng);
-    let _generator_g2 = <IP::RightMessage>::rand(rng);
+    let _generator_g1 = <IP::LeftMessage>::rand(rng);
+    let generator_g2 = <IP::RightMessage>::rand(rng);
 
     let mut start = Instant::now();
-    let v_a = MVP::<IP, LMC, RMC, IPC, D>::collapse_matrix2(&matrix_a, &gamma2, len).unwrap();
+    let v_a = MVP::<IP, LMC, RMC, IPC, D>::collapse_matrix1(&matrix_a, &gamma1, len).unwrap();
     let mut bench = start.elapsed().as_millis();
     println!("\t matrix collapsing time: {} ms", bench);
 
-    let z_vec = MVP::<IP, LMC, RMC, IPC, D>::set_vector(&z, &generator_g1).unwrap();
+    let z_vec = MVP::<IP, LMC, RMC, IPC, D>::set_vector2(&z, &generator_g2).unwrap();
     let a = MVP::<IP, LMC, RMC, IPC, D>::compute_az(&matrix_a, &z).unwrap();
-    let a_vec = MVP::<IP, LMC, RMC, IPC, D>::set_vector(&a, &generator_g1).unwrap();
+    let a_vec = MVP::<IP, LMC, RMC, IPC, D>::set_vector2(&a, &generator_g2).unwrap();
 
 
-    let d1 = IP::inner_product(&z_vec, &gamma2).unwrap();
-    let d2 = IP::inner_product(&gamma1, &v_a).unwrap();
-    let c = IP::inner_product(&z_vec, &v_a).unwrap();
+    let d1 = IP::inner_product(&gamma1, &z_vec).unwrap();
+    let d2 = IP::inner_product(&v_a, &gamma2).unwrap();
+    let c = IP::inner_product(&v_a, &z_vec).unwrap();
     
-    let d1_ = IP::inner_product(&a_vec, &gamma2).unwrap();
+    let d1_ = IP::inner_product(&gamma1, &a_vec).unwrap();
     let d2_ = IP::inner_product(&gamma1, &gamma2).unwrap();
-    let c_ = IP::inner_product(&a_vec, &gamma2).unwrap();
+    let c_ = IP::inner_product(&gamma1, &a_vec).unwrap();
 
     start = Instant::now();
     let (x, bat_l, bat_r, delta) 
         = DORY::<IP, LMC, RMC, IPC, D>::batch_commit(
-            &z_vec.clone(), &v_a.clone(),
-            &a_vec.clone(), &gamma2.clone(), 
+            &v_a.clone(), &z_vec.clone(),
+            &gamma1.clone(), &a_vec.clone(),
             // rng
         ).unwrap();
     bench = start.elapsed().as_millis();
@@ -118,7 +118,7 @@ where
          (&(bat_d1.clone()), &(bat_d2.clone()), &(bat_c.clone()))
         ).unwrap();
     bench = start.elapsed().as_millis();
-    println!("\t proving time (for A, C): {} ms", bench);
+    println!("\t proving time (for B): {} ms", bench);
     // let mut proof_ =
     //     DORY::<IP, LMC, RMC, IPC, D>::prove((&(a_vec.clone()), &(gamma2.clone())),
     //     //  (&(gamma1.clone()), &(gamma2.clone())), 
@@ -132,8 +132,8 @@ where
          (&(bat_d1.clone()), &(bat_d2.clone()), &(bat_c.clone())), &mut proof)
         .unwrap();
     bench = start.elapsed().as_millis();
-    println!("\t verification time (for A, C): {} ms", bench);
-
+    println!("\t verification time (for B): {} ms", bench);
+    
     // let result_ = DORY::<IP, LMC, RMC, IPC, D>::verify(&mut dory_srs.clone(), (&(gamma1.clone()), &(gamma2.clone())),
     //      (&(d1_.clone()), &(d2_.clone()), &(c_.clone())), &mut proof_)
     //     .unwrap();
