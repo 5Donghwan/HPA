@@ -161,11 +161,11 @@ where
     // IPC::Output: AddAssign<LMC::Output>,
 {
     // collapse_matrix(&matrix_a, &gamma2)
-    pub fn collapse_matrix(
+    pub fn collapse_matrix2(
         matrix_a: &[<LMC as DoublyHomomorphicCommitment>::Scalar],
         // r: &[<LMC as DoublyHomomorphicCommitment>::Scalar],
         gamma2: &[IP::RightMessage],
-        generator_g2: &IP::RightMessage,
+        // generator_g2: &IP::RightMessage,
         size: usize,
     ) -> Result<
             // Vec<IP::LeftMessage>,
@@ -176,18 +176,23 @@ where
     {
         let matrix_a = matrix_a.clone();
         let gamma2 = gamma2.clone();
-        let generator_g2 = generator_g2.clone();
+        // let generator_g2 = generator_g2.clone();
         let mut v_a = Vec::new();
-        let zero = <LMC::Scalar>::zero();
+        // let zero = <LMC::Scalar>::zero();
+
+        // for i in 0..size{
+        //     let mut temp = mul_helper(&generator_g2, &zero);
+        //     for j in 0..size{
+        //         if matrix_a[j*size + i] != zero{
+        //             let temp2 = mul_helper(&gamma2[j], &matrix_a[j*size+i]);
+        //             temp = temp + temp2;
+        //         }
+        //     }
+        //     v_a.push(temp);
+        // }
 
         for i in 0..size{
-            let mut temp = mul_helper(&generator_g2, &zero);
-            for j in 0..size{
-                if matrix_a[j*size + i] != zero{
-                    let temp2 = mul_helper(&gamma2[j], &matrix_a[j*size+i]);
-                    temp = temp + temp2;
-                }
-            }
+            let temp = mul_helper(&gamma2[i], &matrix_a[i]);
             v_a.push(temp);
         }
 
@@ -267,11 +272,17 @@ where
         let size = z.len();
         // let zero = <LMC as DoublyHomomorphicCommitment::Scalar>::zero();
 
+        // for i in 0..size{
+        //     let mut temp = <LMC::Scalar>::zero();
+        //     for j in 0..size{
+        //         temp = temp + matrix_a[i*size + j] * z[j];
+        //     }
+        //     a_vec.push(temp);
+        // }
+
         for i in 0..size{
-            let mut temp = <LMC::Scalar>::zero();
-            for j in 0..size{
-                temp = temp + matrix_a[i*size + j] * z[j];
-            }
+            let temp = matrix_a[i] * z[i];
+                    
             a_vec.push(temp);
         }
 

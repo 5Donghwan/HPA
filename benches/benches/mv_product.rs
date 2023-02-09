@@ -51,8 +51,13 @@ where
     let (gamma2, gamma1) = DORY::<IP,LMC,RMC,IPC, D>::setup(rng, len).unwrap();
 
     // set matrix_a_trans : n*n length vector...
-    // let mut matrix_a = Vec::new();
-    let matrix_a = MVP::<IP,LMC, RMC, IPC, D>::set_sparse_matrix(rng, len).unwrap();
+    /////// let matrix_a = MVP::<IP,LMC, RMC, IPC, D>::set_sparse_matrix(rng, len).unwrap();
+
+    let mut matrix_a = Vec::new();
+    for _ in 0..len{
+        matrix_a.push(<LMC::Scalar>::rand(rng));
+    }
+
 
     // for _ in 0..len*len{
     //     matrix_a.push(<LMC::Scalar>::rand(rng));
@@ -65,10 +70,10 @@ where
     }
 
     let generator_g1 = <IP::LeftMessage>::rand(rng);
-    let generator_g2 = <IP::RightMessage>::rand(rng);
+    let _generator_g2 = <IP::RightMessage>::rand(rng);
 
     let mut start = Instant::now();
-    let v_a = MVP::<IP, LMC, RMC, IPC, D>::collapse_matrix(&matrix_a, &gamma2, &generator_g2, len).unwrap();
+    let v_a = MVP::<IP, LMC, RMC, IPC, D>::collapse_matrix2(&matrix_a, &gamma2, len).unwrap();
     let mut bench = start.elapsed().as_millis();
     println!("\t matrix collapsing time: {} ms", bench);
 
@@ -138,7 +143,7 @@ where
 
 
 fn main() {
-    const LEN: usize = 32;
+    const LEN: usize = 2048;
     type GC1 = AFGHOCommitmentG1<Bls12_381>;
     type GC2 = AFGHOCommitmentG2<Bls12_381>;
     let mut rng = StdRng::seed_from_u64(0u64);
