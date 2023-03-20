@@ -26,8 +26,8 @@ rustup install stable
 
 After that, use `cargo`, the standard Rust build tool, to build the library:
 ```bash
-git clone https://github.com/scipr-lab/ripp.git
-cd ripp
+git clone https://github.com/5Donghwan/HPA.git
+cd HPA
 cargo build --release
 ```
 
