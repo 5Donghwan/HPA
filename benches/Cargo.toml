@@ -32,6 +32,7 @@ ark-dh-commitments = { path = "../dh_commitments" }
 ark-dory_with_zk = {path = "../dory_with_zk"}
 ark-hpa = {path = "../hpa"}
 ark-hpa-bp = {path = "../hpa_bp"}
+ark-hpa-kzg = {path = "../hpa_kzg"}
 ark-ghpa-afgho = {path = "../ghpa_afgho"}
 ark-mv-product = {path = "../mv_product"}
 
@@ -74,6 +75,11 @@ harness = false
 [[bench]]
 name = "hpa_batch"
 path = "benches/hpa_batch.rs"
+harness = false
+
+[[bench]]
+name = "hpa_kzg"
+path = "benches/hpa_kzg.rs"
 harness = false
 
 [[bench]]

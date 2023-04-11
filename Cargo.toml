@@ -11,5 +11,6 @@ members = [
   "hpa",
   "hpa_bp",
   "ghpa_afgho",
-  "mv_product"
+  "mv_product",
+  "hpa_kzg"
 ]
