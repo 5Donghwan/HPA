@@ -776,7 +776,11 @@ where
                 // d2_prime = d2_prime + mul_helper(&d2_plus, &alpha) + mul_helper(&d2_minus, &alpha_inv);
                 d3_prime = mul_helper(&d3_l, &alpha_sqr) + mul_helper(&d3_r, &gm_inv) + mul_helper(&d3_plus, &alpha) + mul_helper(&d3_minus, &alpha_gm_inv);
 
-                // Verify commitment keys wellformed
+              
+
+                // Scalar product
+                if i == round - 1 {
+                      // Verify commitment keys wellformed
                 let (ck_a_final, ck_b_final) = &proof.final_ck;
                 let (ck_a_proof, ck_b_proof) = &proof.final_ck_proof;
 
@@ -813,9 +817,7 @@ where
                     &<P::Fr>::one(),
                     &c,
                 )?;
-
-                // Scalar product
-                if i == round - 1 {
+                println!(" verifier c : {}", c);
                     let e1 = proof.e1.clone();
                     let e2 = proof.e2.clone();
 
@@ -856,10 +858,10 @@ where
                     }
                     
                     result = result1 && result2 && result3;
-                    println!("result1 : {}, result2 : {}, result3 : {}", result1, result2, result3);
+                    result = result && ck_a_valid && ck_b_valid;
+                    //println!("result1 : {}, result2 : {}, result3 : {}", result1, result2, result3);
                 }
-                result = result && ck_a_valid && ck_b_valid;
-                //println!("ck_a_result : {}, ck_b_result : {}", ck_a_valid, ck_b_valid);
+                
             }
             Ok(result)
         } else {
@@ -1157,6 +1159,7 @@ where
         
         // r_transcript.reverse();
         r_commitment_steps.reverse();
+        alpha_transcript.reverse();
         r_d1_x.reverse();
         r_d2_x.reverse();
 
@@ -1165,7 +1168,7 @@ where
         let transcript = alpha_transcript.clone();
         //let transcript_inverse = transcript.iter().map(|x| x.inverse().unwrap()).collect();
         //let r_inverse = r_shift.inverse().unwrap();
-
+        //println!("ck_a_final: {} ck_b_final: {}", ck_a_final, ck_b_final);
         // KZG challenge point
         let mut counter_nonce: usize = 0;
         let c = loop {
@@ -1182,7 +1185,7 @@ where
             };
             counter_nonce += 1;
         };
-
+        println!(" prover c : {}", c);
         // Complete KZG proofs
         let ck_a_kzg_opening = prove_commitment_key_kzg_opening(
             &srs.g_beta_powers,
