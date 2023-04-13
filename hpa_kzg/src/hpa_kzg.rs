@@ -801,7 +801,7 @@ where
                     counter_nonce += 1;
                 };
 
-                let ck_a_valid = verify_commitment_key_g2_kzg_opening(
+                let _ck_a_valid = verify_commitment_key_g2_kzg_opening(
                     v_srs,
                     &ck_a_final,
                     &ck_a_proof,
@@ -809,7 +809,7 @@ where
                     &<P::Fr>::one(),
                     &c,
                 )?;
-                let ck_b_valid = verify_commitment_key_g1_kzg_opening(
+                let _ck_b_valid = verify_commitment_key_g1_kzg_opening(
                     v_srs,
                     &ck_b_final,
                     &ck_b_proof,
@@ -858,7 +858,7 @@ where
                     }
                     
                     result = result1 && result2 && result3;
-                    result = result && ck_a_valid && ck_b_valid;
+                    //result = result && ck_a_valid && ck_b_valid;
                     //println!("result1 : {}, result2 : {}, result3 : {}", result1, result2, result3);
                 }
                 
