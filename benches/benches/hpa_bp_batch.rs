@@ -153,7 +153,9 @@ where
 
 fn main() { 
     let arg = env::args().nth(1).unwrap();
-    let LEN: usize =arg.parse().unwrap();
+    let power: u32 =arg.parse().unwrap();
+    
+    let len = usize::pow(2,power);
 
     // const LEN: usize = 32;
     type CM = PedersenCommitment<<Bls12_381 as PairingEngine>::G1Projective>;
@@ -161,7 +163,7 @@ fn main() {
     // type GC2 = AFGHOCommitmentG2<Bls12_381>;
     let mut rng = StdRng::seed_from_u64(0u64);
 
-    println!("Benchmarking HPA_with_zk with vector length: {}", LEN);
+    println!("Benchmarking HPA_with_zk with vector length: {}", len);
 
     println!("1) Pairing hadamard product...");
     bench_hpa_bp::<
@@ -174,6 +176,6 @@ fn main() {
         Bls12_381,
         Blake2b,
         StdRng,
-    >(&mut rng, LEN);
+    >(&mut rng, len);
 
 }
