@@ -632,7 +632,7 @@ where
 
                 let alpha = last_transcript.0;
                 // println!("ver al : {}", alpha);
-                // let alpha_inv = last_transcript.1;
+                // let inv = last_transcript.1;
                 let gm_inv = last_transcript.2;
 
 

@@ -83,6 +83,11 @@ path = "benches/hpa_kzg.rs"
 harness = false
 
 [[bench]]
+name = "hpa_kzg_batch"
+path = "benches/hpa_kzg_batch.rs"
+harness = false
+
+[[bench]]
 name = "hpa_bp"
 path = "benches/hpa_bp.rs"
 harness = false
