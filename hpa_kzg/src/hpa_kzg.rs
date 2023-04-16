@@ -160,8 +160,10 @@ pub struct VerifierSRS<P: PairingEngine> {
 
 impl<P: PairingEngine> SRS<P> {
     pub fn get_commitment_keys(&self) -> (Vec<P::G1Projective>, Vec<P::G1Projective>) {
-        let ck_1 = self.g_beta_powers.iter().step_by(2).cloned().collect();
-        let ck_2 = self.g_alpha_powers.iter().step_by(2).cloned().collect();
+        let mut ck_1 : Vec<P::G1Projective> = self.g_beta_powers.iter().step_by(2).cloned().collect();
+        let mut ck_2 : Vec<P::G1Projective> = self.g_alpha_powers.iter().step_by(2).cloned().collect();
+        ck_1.reverse();
+        ck_2.reverse();
         (ck_1, ck_2)
     }
 
