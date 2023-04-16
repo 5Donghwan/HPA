@@ -60,7 +60,9 @@ where
 
     //let (gamma1, gamma2)= HPA::<IP,CM, D>::setup(rng, len).unwrap();
     let srs = HPA::<IP, CM, P, D>::setup(rng, len).unwrap();
-    let (gamma1, gamma2) = srs.get_commitment_keys();
+    let (mut gamma1, mut gamma2) = srs.get_commitment_keys();
+    gamma1.reverse();
+    gamma2.reverse();
     let v_srs = srs.get_verifier_key();
     // let mut h1 = Vec::new();
     // let mut h2 = Vec::new();

@@ -145,7 +145,7 @@ where
 pub struct SRS<P: PairingEngine> {
     pub g_alpha_powers: Vec<P::G1Projective>,
     pub g_beta_powers: Vec<P::G1Projective>,
-    pub h : P::G2Projective,
+    pub h_beta_powers : Vec<P::G2Projective>,
     pub h_beta: P::G2Projective,
     pub h_alpha: P::G2Projective,
 }
@@ -168,7 +168,7 @@ impl<P: PairingEngine> SRS<P> {
     pub fn get_verifier_key(&self) -> VerifierSRS<P> {
         VerifierSRS { 
             g: self.g_alpha_powers[0].clone(),
-            h: self.h.clone(),
+            h: self.h_beta_powers[0].clone(),
             h_beta: self.h_beta.clone(),
             h_alpha: self.h_alpha.clone(),
         }
@@ -520,12 +520,11 @@ where
         let beta = <P::Fr>::rand(rng);
         let g = <P::G1Projective>::prime_subgroup_generator();
         let h = <P::G2Projective>::prime_subgroup_generator();
-        
         Ok(
             SRS {
                 g_alpha_powers: structured_generators_scalar_power(2 * size - 1, &g, &alpha),
                 g_beta_powers: structured_generators_scalar_power(2 * size - 1, &g, &beta),
-                h : h,
+                h_beta_powers: structured_generators_scalar_power(2 * size - 1, &h, &beta),
                 h_beta: h.mul(beta.into_repr()),
                 h_alpha: h.mul(alpha.into_repr()),
             }
@@ -703,7 +702,7 @@ where
 
         if round > 0 {
             for i in 0..round {
-                // println!("check");
+                //println!("check");
                 // Verifier's work in reduce
                 //let split = gamma1.len() / 2;
 
@@ -783,7 +782,7 @@ where
                       // Verify commitment keys wellformed
                 let (ck_a_final, ck_b_final) = &proof.final_ck;
                 let (ck_a_proof, ck_b_proof) = &proof.final_ck_proof;
-
+                //alpha_transcript.reverse();
                 // KZG challenge point
                 let mut counter_nonce: usize = 0;
                 let c = loop {
@@ -817,7 +816,6 @@ where
                     &<P::Fr>::one(),
                     &c,
                 )?;
-                println!(" verifier c : {}", c);
                     let e1 = proof.e1.clone();
                     let e2 = proof.e2.clone();
 
@@ -858,7 +856,8 @@ where
                     }
                     
                     result = result1 && result2 && result3;
-                    //result = result && ck_a_valid && ck_b_valid;
+                    //println!("ck_a_valid : {} , _ck_b_valid : {}", _ck_a_valid, _ck_b_valid);
+                    result = result && _ck_a_valid && _ck_b_valid;
                     //println!("result1 : {}, result2 : {}, result3 : {}", result1, result2, result3);
                 }
                 
@@ -1185,7 +1184,6 @@ where
             };
             counter_nonce += 1;
         };
-        println!(" prover c : {}", c);
         // Complete KZG proofs
         let ck_a_kzg_opening = prove_commitment_key_kzg_opening(
             &srs.g_beta_powers,
@@ -1285,7 +1283,7 @@ where
             r_transcript.push((alpha, alpha_inv, gm_inv));
         }
         r_transcript.reverse();
-        // println!("r_transcript len : {}", r_transcript.len());
+        //println!("r_transcript len : {}", r_transcript.len());
 
         let ch_c = 'challenge: loop {
             let mut hash_input = Vec::new();
@@ -1456,7 +1454,6 @@ pub fn prove_commitment_key_kzg_opening<G: ProjectiveCurve>(
     let ck_polynomial_c_eval =
         polynomial_evaluation_product_form_from_transcript(&transcript, kzg_challenge, &r_shift);
     end_timer!(eval);
-
     let quotient = start_timer!(|| "polynomial quotient");
     let quotient_polynomial = &(&ck_polynomial
         - &DensePolynomial::from_coefficients_vec(vec![ck_polynomial_c_eval]))
