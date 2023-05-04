@@ -19,7 +19,7 @@ use ark_std::rand::{rngs::StdRng, Rng, SeedableRng};
 use blake2::Blake2b;
 use digest::Digest;
 
-use std::{ops::MulAssign, time::Instant};
+use std::{ops::MulAssign, time::Instant, env};
 
 fn bench_mvp<IP, LMC, RMC, IPC, P, D, R: Rng>(rng: &mut R, len: usize)
 where
@@ -144,12 +144,15 @@ where
 
 
 fn main() {
-    const LEN: usize = 2048;
+    let arg = env::args().nth(1).unwrap();
+    let power: u32 =arg.parse().unwrap();
+    
+    let len = usize::pow(2,power);
     type GC1 = AFGHOCommitmentG1<Bls12_381>;
     type GC2 = AFGHOCommitmentG2<Bls12_381>;
     let mut rng = StdRng::seed_from_u64(0u64);
 
-    println!("Benchmarking MV-product with matrix size: {} * {}, vector length: {}", LEN, LEN, LEN);
+    println!("Benchmarking MV-product with matrix size: {} * {}, vector length: {}", len, len, len);
 
     println!("1) Pairing inner product...");
     bench_mvp::<
@@ -160,6 +163,6 @@ fn main() {
         Bls12_381,
         Blake2b,
         StdRng,
-    >(&mut rng, LEN);
+    >(&mut rng, len);
 
 }
