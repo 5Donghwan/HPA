@@ -67,6 +67,10 @@ where
     h1.push(<IP::LeftMessage>::rand(rng));
     h2.push(<IP::RightMessage>::rand(rng));
 
+    //precomputing commitment keys are done before sending commitments
+    let mut hpa_srs = HPA::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone())), &h1, &h2).unwrap();
+    let mut hpa_srs_ = HPA::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone())), &h1, &h2).unwrap();
+
     let (c, d1, d2,
         x, y, d3, d4,
         gm, gm_vec, r_c, r_d1, r_d2, r_x, r_y, r_d3, r_d4,
@@ -83,9 +87,6 @@ where
     let bool_x = x == x_;
     println!("X == X' : {}", bool_x);   
 
-
-    let mut hpa_srs = HPA::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone())), &h1, &h2).unwrap();
-    let mut hpa_srs_ = HPA::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone())), &h1, &h2).unwrap();
 
 
     let mut start = Instant::now();
