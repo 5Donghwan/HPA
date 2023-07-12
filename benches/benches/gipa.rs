@@ -67,7 +67,7 @@ where
 }
 
 fn main() {
-    const LEN: usize = 16;
+    const LEN: usize = 1048576;
     type GC1 = AFGHOCommitmentG1<Bls12_381>;
     type GC2 = AFGHOCommitmentG2<Bls12_381>;
     type SC1 = PedersenCommitment<<Bls12_381 as PairingEngine>::G1Projective>;
