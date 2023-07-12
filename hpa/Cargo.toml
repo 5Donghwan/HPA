@@ -3,6 +3,7 @@ name = "ark-hpa"
 version = "0.3.0"
 authors = [
     "Hankyung Ko",
+    "Donghwan Oh",
 ]
 
 [dependencies]
