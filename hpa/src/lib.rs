@@ -6,6 +6,7 @@ use std::{
 };
 
 pub mod hpa;
+pub mod applications;
 
 pub type Error = Box<dyn ErrorTrait>;
 
