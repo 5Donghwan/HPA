@@ -357,7 +357,8 @@ fn main() {
                 .unwrap();
             csv_writer.flush().unwrap();
             let v_srs = srs.get_verifier_key();
-
+//setup_inner_product 에서 TIPA AB key setup
+//aggregate_proofs 에서 AB쪽 TIPA, Cd 쪽 MIPP 호출 -> HPA 는 각각 한번씩 호출하면 될듯.
             for i in 1..=num_trials {
                 start = Instant::now();
                 let aggregate_proof =
