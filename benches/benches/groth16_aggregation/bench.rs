@@ -2,32 +2,67 @@ use ark_bls12_377::{
     constraints::PairingVar as BLS12PairingVar, Bls12_377, Fr as BLS12Fr,
     FrParameters as BLS12FrParameters,
 };
-use ark_bw6_761::{Fr as BW6Fr, BW6_761};
+use ark_bw6_761::Fr as BW6Fr;
 use ark_crypto_primitives::{
+    snark::*,
     prf::{
-        blake2s::{constraints::Blake2sGadget, Blake2s},
+        blake2s::{constraints::Blake2sGadget,Blake2s},
         constraints::PRFGadget,
         PRF,
     },
-    snark::*,
 };
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{
     biginteger::BigInteger, FftParameters, One, PrimeField, ToConstraintField, UniformRand,
 };
 use ark_groth16::{constraints::*, Groth16, PreparedVerifyingKey, Proof, VerifyingKey};
-use ark_r1cs_std::prelude::*;
+use ark_r1cs_std::{fields::fp::FpVar, prelude::*};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
-use ark_ip_proofs::applications::groth16_aggregation::{
-    aggregate_proofs, setup_inner_product, verify_aggregate_proof,
+use ark_bls12_381::{Bls12_381,Fr, G1Projective};
+use ark_dh_commitments::{
+    afgho16::{AFGHOCommitmentG1, AFGHOCommitmentG2},
+    identity::IdentityCommitment,
+    // pedersen::PedersenCommitment,
+    DoublyHomomorphicCommitment,
 };
 
-use ark_std::rand::{rngs::StdRng, SeedableRng};
-use blake2::Blake2b;
-use csv::Writer;
+use ark_inner_products::{
+    ExtensionFieldElement, InnerProduct, PairingInnerProduct,
+};
+use ark_hpa::hpa::HPA;
+// use ark_ip_proofs::applications::groth16_aggregation::{
+//     aggregate_proofs, setup_inner_product, verify_aggregate_proof,
+// };
 
-use std::{io::stdout, time::Instant};
+use ark_std::rand::{rngs::StdRng, SeedableRng,Rng};
+use blake2::Blake2b;
+use digest::Digest;
+use std::{ops::MulAssign, time::Instant,env};
+
+#[derive(Clone)]
+// struct TestCircuit {
+//     public_inputs: Vec<Fr>,
+//     witness_input: Fr,
+//     public_sum: Fr,
+// }
+// impl <F: PrimeField>ConstraintSynthesizer<F> for TestCircuit {
+//     fn generate_constraints(self, cs: ConstraintSystemRef<F>) -> Result<(), SynthesisError> {
+//         let input_variables =
+//             Vec::<F>::new_input_vec(cs.clone(), || Ok(self.public_inputs.clone()))?;
+//         let sum = FpVar::new_input(cs.clone(), || Ok(&self.public_sum))?;
+//         let witness = FpVar::new_witness(cs.clone(), || Ok(&self.witness_input))?;
+
+//         let mut computed_sum = witness;
+//         for x in &input_variables {
+//             computed_sum += x;
+//         }
+
+//         sum.enforce_equal(&computed_sum)?;
+
+//         Ok(())
+//     }
+// }
 
 #[derive(Default)]
 struct SingleBlake2SCircuit {
@@ -203,92 +238,87 @@ impl ToConstraintField<BW6Fr> for AggregateBlake2SCircuitVerificationCircuitInpu
     }
 }
 
-fn main() {
-    let mut args: Vec<String> = std::env::args().collect();
-    if args.last().unwrap() == "--bench" {
-        args.pop();
-    }
-    let temp = if args.len() < 2 || args[1] == "-h" || args[1] == "--help" {
-        println!("Usage: ``cargo bench --bench groth16_aggregation -- <num_trials> <num_proofs> <bench_rec=(true/false)> <generate_all_proofs=(true/false)> <monolithic_proof=(true/false)>``");
-        return;
-    } else {
-        let bench_recursion = match args.get(3).unwrap_or(&"true".to_string()).as_ref() {
-            "true" => true,
-            "false" => false,
-            _ => panic!("<bench_rec> should be true/false"),
-        };
-        let generate_all_proofs = match args.get(4).unwrap_or(&"true".to_string()).as_ref() {
-            "true" => true,
-            "false" => false,
-            _ => panic!("<generate_all_proofs> should be true/false"),
-        };
-        let monolithic_proof = match args.get(4).unwrap_or(&"true".to_string()).as_ref() {
-            "true" => true,
-            "false" => false,
-            _ => panic!("<monolithic_proof> should be true/false"),
-        };
-        (
-            String::from(args[1].clone())
-                .parse()
-                .expect("<num_trials> should be integer"),
-            String::from(args[2].clone())
-                .parse()
-                .expect("<num_proofs> should be integer"),
-            bench_recursion,
-            generate_all_proofs,
-            monolithic_proof,
-        )
-    };
-    let (num_trials, num_proofs, bench_recursion, generate_all_proofs, generate_monolithic_proof): (usize, usize, _, _, _)  = temp;
 
-    let mut csv_writer = Writer::from_writer(stdout());
-    csv_writer
-        .write_record(&["trial", "num_proofs", "scheme", "function", "time"])
-        .unwrap();
-    csv_writer.flush().unwrap();
-    let mut start;
+fn bench_hpa_aggregate<IP, LMC, RMC, IPC, P, D, R: Rng>(rng: &mut R, len: usize)
+where
+    D: Digest,
+    P: PairingEngine,
+    IP: InnerProduct<
+        LeftMessage = LMC::Message,
+        RightMessage = RMC::Message,
+        Output = IPC::Message,
+    >,
+    LMC: DoublyHomomorphicCommitment<Scalar = P::Fr, Key = P::G2Projective, Message = P::G1Projective>,
+    RMC: DoublyHomomorphicCommitment<Scalar = LMC::Scalar, Key = P::G1Projective, Message = P::G2Projective>,
+    IPC: DoublyHomomorphicCommitment<Scalar = LMC::Scalar>,
+    LMC::Message: MulAssign<P::Fr>,
+    RMC::Message: MulAssign<P::Fr>,
+    IPC::Message: MulAssign<P::Fr>,
+    IPC::Key: MulAssign<P::Fr>,
+    LMC::Output: MulAssign<P::Fr>,
+    RMC::Output: MulAssign<P::Fr>,
+    IPC::Output: MulAssign<P::Fr>,
+    IPC::Output: MulAssign<LMC::Scalar>,
+    IP::LeftMessage: UniformRand,
+    IP::RightMessage: UniformRand,
+    LMC::Output: MulAssign<LMC::Scalar>,
+    // IPC::Message: AddAssign<LMC::Output>,
+    // IPC::Message: AddAssign<RMC::Output>,
+    // RMC::Output: AddAssign<LMC::Output>,
+{
+    let mut start = Instant::now();
     let mut time;
-    let mut rng = StdRng::seed_from_u64(0u64);
+    let mut rng_: StdRng = StdRng::seed_from_u64(0u64);
+    let generate_all_proofs = true;
+    const NUM_PUBLIC_INPUTS: usize = 16;
 
-    // Compute hashes
+
     let mut hash_inputs = vec![];
     let mut hash_outputs = vec![];
-    for _ in 0..num_proofs {
-        let hash_input = UniformRand::rand(&mut rng);
+    for _ in 0..len {
+        let hash_input = UniformRand::rand(&mut rng_);
         hash_outputs.push(Blake2s::evaluate(&[0; 32], &hash_input).unwrap());
         hash_inputs.push(hash_input);
     }
+    //let parameters = Groth16::<P>::setup(test_circuit, &mut rng_).unwrap();
+    let hash_circuit_parameters =
+            Groth16::<P>::setup(SingleBlake2SCircuit::default(), &mut rng_).unwrap();
+        time = start.elapsed().as_millis();
+    // Generate parameters for inner product aggregation
+    //let srs = setup_inner_product::<_, Blake2b, _>(&mut rng, len).unwrap();
 
-    {
-        // Prove individual proofs
+    // Generate proofs
+    println!("Generating {} Groth16 proofs...", len);
+    
+   // Prove individual proofs
         start = Instant::now();
         let hash_circuit_parameters =
-            Groth16::<Bls12_377>::setup(SingleBlake2SCircuit::default(), &mut rng).unwrap();
+            Groth16::<P>::setup(SingleBlake2SCircuit::default(), &mut rng_).unwrap();
         time = start.elapsed().as_millis();
         if generate_all_proofs {
-            csv_writer
-                .write_record(&[
-                    1.to_string(),
-                    num_proofs.to_string(),
-                    "single_circuit".to_string(),
-                    "setup".to_string(),
-                    time.to_string(),
-                ])
-                .unwrap();
-            csv_writer.flush().unwrap();
+            // csv_writer
+            //     .write_record(&[
+            //         1.to_string(),
+            //         num_proofs.to_string(),
+            //         "single_circuit".to_string(),
+            //         "setup".to_string(),
+            //         time.to_string(),
+            //     ])
+            //     .unwrap();
+            // csv_writer.flush().unwrap();
         }
 
         start = Instant::now();
-        let mut proofs = vec![];
-        for i in 0..num_proofs {
+        let mut proofs: Vec<Proof<P>> = vec![];
+        for i in 0..len {
             proofs.push(
-                Groth16::<Bls12_377>::prove(
+                Groth16::<P>::prove(
                     &hash_circuit_parameters.0,
                     SingleBlake2SCircuit {
                         input: hash_inputs[i].clone(),
                         output: hash_outputs[i].clone(),
                     },
-                    &mut rng,
+                    &mut rng_,
                 )
                 .unwrap(),
             );
@@ -300,234 +330,146 @@ fn main() {
         time = start.elapsed().as_millis();
 
         if !generate_all_proofs {
-            proofs = vec![proofs[0].clone(); num_proofs];
-            hash_inputs = vec![hash_inputs[0]; num_proofs];
-            hash_outputs = vec![hash_outputs[0]; num_proofs];
+            proofs = vec![proofs[0].clone(); len];
+            hash_inputs = vec![hash_inputs[0]; len];
+            hash_outputs = vec![hash_outputs[0]; len];
         } else {
-            csv_writer
-                .write_record(&[
-                    1.to_string(),
-                    num_proofs.to_string(),
-                    "single_circuit".to_string(),
-                    "prove".to_string(),
-                    time.to_string(),
-                ])
-                .unwrap();
-            csv_writer.flush().unwrap();
-        }
-        {
-            start = Instant::now();
-            let result = batch_verify_proof(
-                &ark_groth16::prepare_verifying_key(&hash_circuit_parameters.0.vk),
-                &hash_outputs
-                    .iter()
-                    .map(|h| h.to_field_elements())
-                    .collect::<Option<Vec<Vec<<Bls12_377 as PairingEngine>::Fr>>>>()
-                    .unwrap(),
-                &proofs,
-            )
-            .unwrap();
-            time = start.elapsed().as_millis();
-            csv_writer
-                .write_record(&[
-                    1.to_string(),
-                    num_proofs.to_string(),
-                    "single_circuit".to_string(),
-                    "verify".to_string(),
-                    time.to_string(),
-                ])
-                .unwrap();
-            csv_writer.flush().unwrap();
-            assert!(result);
-        }
+            // csv_writer
+            //     .write_record(&[
+            //         1.to_string(),
+            //         len.to_string(),
+            //         "single_circuit".to_string(),
+            //         "prove".to_string(),
+            //         time.to_string(),
+            //     ])
+            //     .unwrap();
+            // csv_writer.flush().unwrap();
+        
 
-        // Benchmark aggregation via IPA
-        {
-            start = Instant::now();
-            let srs = setup_inner_product::<Bls12_377, Blake2b, _>(&mut rng, num_proofs).unwrap();
-            time = start.elapsed().as_millis();
-            csv_writer
-                .write_record(&[
-                    1.to_string(),
-                    num_proofs.to_string(),
-                    "ipa".to_string(),
-                    "setup".to_string(),
-                    time.to_string(),
-                ])
-                .unwrap();
-            csv_writer.flush().unwrap();
-            let v_srs = srs.get_verifier_key();
-//setup_inner_product 에서 TIPA AB key setup
-//aggregate_proofs 에서 AB쪽 TIPA, Cd 쪽 MIPP 호출 -> HPA 는 각각 한번씩 호출하면 될듯.
-            for i in 1..=num_trials {
-                start = Instant::now();
-                let aggregate_proof =
-                    aggregate_proofs::<Bls12_377, Blake2b>(&srs, &proofs).unwrap();
-                time = start.elapsed().as_millis();
-                csv_writer
-                    .write_record(&[
-                        i.to_string(),
-                        num_proofs.to_string(),
-                        "ipa".to_string(),
-                        "aggregate".to_string(),
-                        time.to_string(),
-                    ])
-                    .unwrap();
-                csv_writer.flush().unwrap();
 
-                start = Instant::now();
-                let result = verify_aggregate_proof(
-                    &v_srs,
-                    &hash_circuit_parameters.0.vk,
-                    &hash_outputs
-                        .iter()
-                        .map(|h| h.to_field_elements())
-                        .collect::<Option<Vec<Vec<<Bls12_377 as PairingEngine>::Fr>>>>()
-                        .unwrap(),
-                    &aggregate_proof,
-                )
-                .unwrap();
-                time = start.elapsed().as_millis();
-                csv_writer
-                    .write_record(&[
-                        i.to_string(),
-                        num_proofs.to_string(),
-                        "ipa".to_string(),
-                        "verify".to_string(),
-                        time.to_string(),
-                    ])
-                    .unwrap();
-                csv_writer.flush().unwrap();
-                assert!(result);
-            }
-        }
-
-        // Benchmark aggregation via one-layer recursion
-        if bench_recursion {
-            let agg_verification_circuit = AggregateBlake2SCircuitVerificationCircuit {
-                hash_outputs: hash_outputs.clone(),
-                proofs: proofs.clone(),
-                vk: hash_circuit_parameters.0.vk.clone(),
-            };
-            let agg_verifier_input = AggregateBlake2SCircuitVerificationCircuitInput {
-                hash_outputs: hash_outputs.clone(),
-            };
-            start = Instant::now();
-            let agg_verification_circuit_parameters =
-                Groth16::<BW6_761>::setup(agg_verification_circuit.clone(), &mut rng).unwrap();
-            time = start.elapsed().as_millis();
-            csv_writer
-                .write_record(&[
-                    1.to_string(),
-                    num_proofs.to_string(),
-                    "olr".to_string(),
-                    "setup".to_string(),
-                    time.to_string(),
-                ])
-                .unwrap();
-            csv_writer.flush().unwrap();
-
-            for i in 1..=num_trials {
-                start = Instant::now();
-                let aggregate_proof = Groth16::<BW6_761>::prove(
-                    &agg_verification_circuit_parameters.0,
-                    agg_verification_circuit.clone(),
-                    &mut rng,
-                )
-                .unwrap();
-                time = start.elapsed().as_millis();
-                csv_writer
-                    .write_record(&[
-                        i.to_string(),
-                        num_proofs.to_string(),
-                        "olr".to_string(),
-                        "aggregate".to_string(),
-                        time.to_string(),
-                    ])
-                    .unwrap();
-                csv_writer.flush().unwrap();
-
-                start = Instant::now();
-                let result = Groth16::<BW6_761>::verify(
-                    &agg_verification_circuit_parameters.1,
-                    &agg_verifier_input.to_field_elements().unwrap(),
-                    &aggregate_proof,
-                )
-                .unwrap();
-                time = start.elapsed().as_millis();
-                csv_writer
-                    .write_record(&[
-                        i.to_string(),
-                        num_proofs.to_string(),
-                        "olr".to_string(),
-                        "verify".to_string(),
-                        time.to_string(),
-                    ])
-                    .unwrap();
-                csv_writer.flush().unwrap();
-                assert!(result);
-            }
-        }
+        //let result = Groth16::<Bls12_381, TestCircuit, [Fr]>::verify(&parameters.1, &statement, &proof).unwrap();
+        //assert!(result);
     }
+    
+    //let generator_g1 = <IP::LeftMessage>::rand(rng);
+    //let generator_g2 = <IP::RightMessage>::rand(rng);
+    
+    //let (v1, v2, u1, u2) = HPA::<IP, LMC, RMC, IPC, D>::set_values(&l, &r, &generator_g1, &generator_g2).unwrap();
+    let a = proofs
+        .iter()
+        .map(|proof| proof.a.into_projective())
+        // .collect::<Vec<P::G1Projective>>();
+        .collect::<Vec<<P as PairingEngine>::G1Projective>>();
+    let b = proofs
+        .iter()
+        .map(|proof| proof.b.into_projective())
+        // .collect::<Vec<P::G2Projective>>();
+        .collect::<Vec<<P as PairingEngine>::G2Projective>>();
+    let cc: Vec<<P as PairingEngine>::G1Projective> = proofs
+        .iter()
+        .map(|proof| proof.c.into_projective())
+        // .collect::<Vec<P::G1Projective>>();
+        .collect::<Vec<<P as PairingEngine>::G1Projective>>();
+    let mut _d = vec![hash_circuit_parameters.0.vk.delta_g2.into_projective().clone(); len];
 
-    // Benchmark complete circuit
-    if generate_monolithic_proof {
-        let circuit = ManyBlake2SCircuit {
-            input: hash_inputs.clone(),
-            output: hash_outputs.clone(),
-        };
-        start = Instant::now();
-        let circuit_parameters = Groth16::<Bls12_377>::setup(circuit.clone(), &mut rng).unwrap();
-        time = start.elapsed().as_millis();
-        csv_writer
-            .write_record(&[
-                1.to_string(),
-                num_proofs.to_string(),
-                "complete_circuit".to_string(),
-                "setup".to_string(),
-                time.to_string(),
-            ])
-            .unwrap();
-        csv_writer.flush().unwrap();
+    let mut _h = vec![hash_circuit_parameters.0.vk.gamma_g2.into_projective().clone(); len];
 
-        start = Instant::now();
-        let proof = Groth16::<Bls12_377>::prove(&circuit_parameters.0, circuit, &mut rng).unwrap();
-        time = start.elapsed().as_millis();
-        csv_writer
-            .write_record(&[
-                1.to_string(),
-                num_proofs.to_string(),
-                "complete_circuit".to_string(),
-                "prove".to_string(),
-                time.to_string(),
-            ])
-            .unwrap();
-        csv_writer.flush().unwrap();
+    let (gamma2, gamma1) = HPA::<IP,LMC,RMC,IPC, D>::setup(rng, len).unwrap();
+    
+    
+    let mut h1 = Vec::new();
+    let mut h2 = Vec::new();
+    h1.push(<IP::LeftMessage>::rand(rng));
+    h2.push(<IP::RightMessage>::rand(rng));
 
-        start = Instant::now();
-        let result = Groth16::<Bls12_377>::verify(
-            &circuit_parameters.1,
-            &hash_outputs
-                .iter()
-                .flat_map(|h| h.to_field_elements().unwrap())
-                .collect::<Vec<BLS12Fr>>(),
-            &proof,
-        )
+    //precomputing commitment keys are done before sending commitments
+    let mut hpa_srs = HPA::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone())), &h1, &h2).unwrap();
+    let mut hpa_srs_ = HPA::<IP, LMC, RMC, IPC, D>::precompute((&(gamma1.clone()), &(gamma2.clone())), &h1, &h2).unwrap();
+
+    let (c, d1, d2,
+        x, y, d3, d4,
+        gm, gm_vec, r_c, r_d1, r_d2, r_x, r_y, r_d3, r_d4,
+        w_vec, k_vec)
+        = HPA::<IP,LMC,RMC,IPC,D>::init_commit(&a, &b, &gamma1, &gamma2, &h1, &h2, rng).unwrap();
+
+    let (c_, d1_, d2_,
+        x_, y_, d3_, d4_,
+        w_vec_, k_vec_)
+            = HPA::<IP,LMC,RMC,IPC,D>::init_commit2(&cc, &_d, &gamma1, &gamma2, &h1, &h2, &gm_vec,
+            &r_c, &r_d1, &r_d2, &r_x, &r_y, &r_d3, &r_d4, rng).unwrap();
+
+    // X ?= X'
+
+    let bool_x = x == x_;
+    println!("X == X' : {}", bool_x);   
+
+
+
+    let mut start = Instant::now();
+    let mut proof =
+        HPA::<IP, LMC, RMC, IPC, D>::prove((&(a.clone()), &(b.clone()), &(w_vec.clone()), &(k_vec.clone())),
+            &hpa_srs, 
+            (&(gamma1.clone()), &(gamma2.clone())), 
+            //  (&(d1.clone()), &(d2.clone()), &(c.clone())),
+            (&r_c, &r_x, &r_y, &r_d1, &r_d2, &r_d3, &r_d4),
+            &gm,
+            rng
+        ).unwrap();
+
+    // let mut start = Instant::now();
+    let mut proof_ =
+        HPA::<IP, LMC, RMC, IPC, D>::prove((&(cc.clone()), &(_d.clone()), &(w_vec_.clone()), &(k_vec_.clone())),
+            &hpa_srs_, 
+            (&(gamma1.clone()), &(gamma2.clone())), 
+            //  (&(d1.clone()), &(d2.clone()), &(c.clone())),
+            (&r_c, &r_x, &r_y, &r_d1, &r_d2, &r_d3, &r_d4),
+            &gm,
+            rng
+        ).unwrap();
+    let mut bench = start.elapsed().as_millis();
+    println!("\t proving time: {} ms", bench);
+
+
+    start = Instant::now();
+    let result = HPA::<IP, LMC, RMC, IPC, D>::verify(&mut hpa_srs, (&(gamma1.clone()), &(gamma2.clone())),
+        (&c, &x, &y, &d1, &d2, &d3, &d4), &mut proof, &gm, rng)
         .unwrap();
-        time = start.elapsed().as_millis();
-        csv_writer
-            .write_record(&[
-                1.to_string(),
-                num_proofs.to_string(),
-                "complete_circuit".to_string(),
-                "verify".to_string(),
-                time.to_string(),
-            ])
-            .unwrap();
-        csv_writer.flush().unwrap();
-        assert!(result);
-    }
+    let result2 = HPA::<IP, LMC, RMC, IPC, D>::verify(&mut hpa_srs_, (&(gamma1.clone()), &(gamma2.clone())),
+    (&c_, &x_, &y_, &d1_, &d2_, &d3_, &d4_), &mut proof_, &gm, rng)
+    .unwrap();
+    bench = start.elapsed().as_millis();
+    println!("\t verification time: {} ms", bench);
+    println!("v1, v2 - result : {}", result);
+    println!("u1, u2 - result : {}", result2);
 }
+
+
+
+fn main() { 
+    let arg = env::args().nth(1).unwrap();
+    let power: u32 =arg.parse().unwrap();
+    
+    let len = usize::pow(2,power);
+
+    // const LEN: usize = 32;
+    type GC1 = AFGHOCommitmentG1<Bls12_381>;
+    type GC2 = AFGHOCommitmentG2<Bls12_381>;
+    let mut rng = StdRng::seed_from_u64(0u64);
+
+    println!("Benchmarking HPA_Groth16_proof_aggregation: {}", len);
+
+    println!("1) Pairing hadamard product...");
+    bench_hpa_aggregate::<
+        PairingInnerProduct<Bls12_381>,
+        GC1,
+        GC2,
+        IdentityCommitment<ExtensionFieldElement<Bls12_381>, <Bls12_381 as PairingEngine>::Fr>,
+        Bls12_381,
+        Blake2b,
+        StdRng,
+    >(&mut rng, len);
+}
+
 
 pub fn batch_verify_proof<E: PairingEngine>(
     pvk: &PreparedVerifyingKey<E>,
