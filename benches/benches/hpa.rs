@@ -5,8 +5,8 @@ use ark_dh_commitments::{
     // pedersen::PedersenCommitment,
     DoublyHomomorphicCommitment,
 };
-use ark_ec::{PairingEngine};
-use ark_ff::{UniformRand};
+use ark_ec::PairingEngine;
+use ark_ff::UniformRand;
 use ark_inner_products::{
     ExtensionFieldElement, InnerProduct, PairingInnerProduct,
 };
@@ -75,12 +75,12 @@ where
         x, y, d3, d4,
         gm, gm_vec, r_c, r_d1, r_d2, r_x, r_y, r_d3, r_d4,
         w_vec, k_vec)
-         = HPA::<IP,LMC,RMC,IPC, D>::init_commit(&v1, &v2, &gamma1, &gamma2, &h1, &h2, rng).unwrap();
+        = HPA::<IP,LMC,RMC,IPC, D>::init_commit(&v1, &v2, &gamma1, &gamma2, &h1, &h2, rng).unwrap();
 
     let (c_, d1_, d2_,
         x_, y_, d3_, d4_,
         w_vec_, k_vec_)
-         = HPA::<IP,LMC,RMC,IPC, D>::init_commit2(&u1, &u2, &gamma1, &gamma2, &h1, &h2, &gm_vec,
+            = HPA::<IP,LMC,RMC,IPC, D>::init_commit2(&u1, &u2, &gamma1, &gamma2, &h1, &h2, &gm_vec,
             &r_c, &r_d1, &r_d2, &r_x, &r_y, &r_d3, &r_d4, rng).unwrap();
 
     // X ?= X'
@@ -92,12 +92,12 @@ where
     let mut start = Instant::now();
     let mut proof =
         HPA::<IP, LMC, RMC, IPC, D>::prove((&(v1.clone()), &(v2.clone()), &(w_vec.clone()), &(k_vec.clone())),
-         &hpa_srs, 
-         (&(gamma1.clone()), &(gamma2.clone())), 
-        //  (&(d1.clone()), &(d2.clone()), &(c.clone())),
-         (&r_c, &r_x, &r_y, &r_d1, &r_d2, &r_d3, &r_d4),
-         &gm,
-         rng
+            &hpa_srs, 
+            (&(gamma1.clone()), &(gamma2.clone())), 
+            //  (&(d1.clone()), &(d2.clone()), &(c.clone())),
+            (&r_c, &r_x, &r_y, &r_d1, &r_d2, &r_d3, &r_d4),
+            &gm,
+            rng
         ).unwrap();
 
     // let mut start = Instant::now();
@@ -116,11 +116,11 @@ where
 
     start = Instant::now();
     let result = HPA::<IP, LMC, RMC, IPC, D>::verify(&mut hpa_srs, (&(gamma1.clone()), &(gamma2.clone())),
-         (&c, &x, &y, &d1, &d2, &d3, &d4), &mut proof, &gm, rng)
+        (&c, &x, &y, &d1, &d2, &d3, &d4), &mut proof, &gm, rng)
         .unwrap();
     let result2 = HPA::<IP, LMC, RMC, IPC, D>::verify(&mut hpa_srs_, (&(gamma1.clone()), &(gamma2.clone())),
     (&c_, &x_, &y_, &d1_, &d2_, &d3_, &d4_), &mut proof_, &gm, rng)
-   .unwrap();
+    .unwrap();
     bench = start.elapsed().as_millis();
     println!("\t verification time: {} ms", bench);
     println!("v1, v2 - result : {}", result);
