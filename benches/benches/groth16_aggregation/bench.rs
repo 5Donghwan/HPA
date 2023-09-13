@@ -310,17 +310,25 @@ where
 
         start = Instant::now();
         let mut proofs: Vec<Proof<P>> = vec![];
-        for i in 0..len {
-            proofs.push(
-                Groth16::<P>::prove(
-                    &hash_circuit_parameters.0,
-                    SingleBlake2SCircuit {
-                        input: hash_inputs[i].clone(),
-                        output: hash_outputs[i].clone(),
-                    },
-                    &mut rng_,
-                )
-                .unwrap(),
+        let proof = Groth16::<P>::prove(
+            &hash_circuit_parameters.0,
+            SingleBlake2SCircuit {
+                input: hash_inputs[0].clone(),
+                output: hash_outputs[0].clone(),
+            },
+            &mut rng_,
+        );
+        for _ in 0..len {
+            proofs.push(proof.clone().unwrap(),
+                // Groth16::<P>::prove(
+                //     &hash_circuit_parameters.0,
+                //     SingleBlake2SCircuit {
+                //         input: hash_inputs[i].clone(),
+                //         output: hash_outputs[i].clone(),
+                //     },
+                //     &mut rng_,
+                // )
+                // .unwrap(),
             );
             if !generate_all_proofs {
                 break;
@@ -328,7 +336,7 @@ where
             //assert!(Groth16::<Bls12_377, SingleBlake2SCircuit, [u8; 32]>::verify(&hash_circuit_parameters.1, &hash_outputs[i], &proofs[i]).unwrap());
         }
         time = start.elapsed().as_millis();
-
+        println!("\t groth16 proof generation time: {} ms", time);
         if !generate_all_proofs {
             proofs = vec![proofs[0].clone(); len];
             hash_inputs = vec![hash_inputs[0]; len];
@@ -402,45 +410,98 @@ where
 
     let bool_x = x == x_;
     println!("X == X' : {}", bool_x);   
-
-
-
+    
     let mut start = Instant::now();
-    let mut proof =
-        HPA::<IP, LMC, RMC, IPC, D>::prove((&(a.clone()), &(b.clone()), &(w_vec.clone()), &(k_vec.clone())),
-            &hpa_srs, 
-            (&(gamma1.clone()), &(gamma2.clone())), 
-            //  (&(d1.clone()), &(d2.clone()), &(c.clone())),
-            (&r_c, &r_x, &r_y, &r_d1, &r_d2, &r_d3, &r_d4),
-            &gm,
+    let (z_c, z_x, z_y,
+        bat_v1, bat_v2,
+        bat_r_c, bat_r_x, bat_r_y,
+        bat_r_d1, bat_r_d2, bat_r_d3, bat_r_d4,
+        bat_w_vec, bat_k_vec, delta) 
+        = HPA::<IP, LMC, RMC, IPC, D>::batch_commit(
+            &r_c, &r_x, &r_y, 
+            &r_d1, &r_d2, &r_d3, &r_d4,
+            &a, &cc,
+            &b, &_d, 
+            &w_vec, &w_vec_,
+            &k_vec, &k_vec_,
+            &h1, &h2,
             rng
         ).unwrap();
 
-    // let mut start = Instant::now();
-    let mut proof_ =
-        HPA::<IP, LMC, RMC, IPC, D>::prove((&(cc.clone()), &(_d.clone()), &(w_vec_.clone()), &(k_vec_.clone())),
-            &hpa_srs_, 
-            (&(gamma1.clone()), &(gamma2.clone())), 
-            //  (&(d1.clone()), &(d2.clone()), &(c.clone())),
-            (&r_c, &r_x, &r_y, &r_d1, &r_d2, &r_d3, &r_d4),
-            &gm,
-            rng
-        ).unwrap();
     let mut bench = start.elapsed().as_millis();
-    println!("\t proving time: {} ms", bench);
+    println!("\t batching time: {} ms", bench);
 
 
     start = Instant::now();
+    // let mut proof =
+    //     HPA::<IP, LMC, RMC, IPC, D>::prove((&(a.clone()), &(b.clone()), &(w_vec.clone()), &(k_vec.clone())),
+    //         &hpa_srs, 
+    //         (&(gamma1.clone()), &(gamma2.clone())), 
+    //         //  (&(d1.clone()), &(d2.clone()), &(c.clone())),
+    //         (&r_c, &r_x, &r_y, &r_d1, &r_d2, &r_d3, &r_d4),
+    //         &gm,
+    //         rng
+    //     ).unwrap();
+
+    // let mut proof_ =
+    //     HPA::<IP, LMC, RMC, IPC, D>::prove((&(cc.clone()), &(_d.clone()), &(w_vec_.clone()), &(k_vec_.clone())),
+    //         &hpa_srs_, 
+    //         (&(gamma1.clone()), &(gamma2.clone())), 
+    //         //  (&(d1.clone()), &(d2.clone()), &(c.clone())),
+    //         (&r_c, &r_x, &r_y, &r_d1, &r_d2, &r_d3, &r_d4),
+    //         &gm,
+    //         rng
+    //     ).unwrap();
+    let mut bat_proof =
+        HPA::<IP, LMC, RMC, IPC, D>::prove((&(bat_v1.clone()), &(bat_v2.clone()), &(bat_w_vec.clone()), &(bat_k_vec.clone())),
+            &hpa_srs, 
+            (&(gamma1.clone()), &(gamma2.clone())), 
+            //  (&(d1.clone()), &(d2.clone()), &(c.clone())),
+            (&bat_r_c, &bat_r_x, &bat_r_y, &bat_r_d1, &bat_r_d2, &bat_r_d3, &bat_r_d4),
+            &gm,
+            rng
+        ).unwrap();
+    bench = start.elapsed().as_millis();
+    println!("\t proving time: {} ms", bench);
+
+    //HPA_Groth16 aggregation verify
+    // start = Instant::now();
+    // let result = HPA::<IP, LMC, RMC, IPC, D>::verify(&mut hpa_srs, (&(gamma1.clone()), &(gamma2.clone())),
+    //     (&c, &x, &y, &d1, &d2, &d3, &d4), &mut proof, &gm, rng)
+    //     .unwrap();
+    // let result2 = HPA::<IP, LMC, RMC, IPC, D>::verify(&mut hpa_srs_, (&(gamma1.clone()), &(gamma2.clone())),
+    // (&c_, &x_, &y_, &d1_, &d2_, &d3_, &d4_), &mut proof_, &gm, rng)
+    // .unwrap();
+    // bench = start.elapsed().as_millis();
+    // println!("\t verification time: {} ms", bench);
+    // println!("v1, v2 - result : {}", result);
+    // println!("u1, u2 - result : {}", result2);
+    
+    //batch verify
+    start = Instant::now();
+    let (bat_c, bat_x, bat_y,
+        bat_d1, bat_d2, bat_d3, bat_d4)
+        = HPA::<IP, LMC, RMC, IPC, D>::batch_verify (
+            &c, &c_,
+            &x, &x_,
+            &y, &y_,
+            &d1, &d1_,
+            &d2, &d2_,
+            &d3, &d3_,
+            &d4, &d4_,
+            &z_c, &z_x, &z_y,
+            &delta
+        ).unwrap();
+
     let result = HPA::<IP, LMC, RMC, IPC, D>::verify(&mut hpa_srs, (&(gamma1.clone()), &(gamma2.clone())),
-        (&c, &x, &y, &d1, &d2, &d3, &d4), &mut proof, &gm, rng)
+        (&bat_c, &bat_x, &bat_y, &bat_d1, &bat_d2, &bat_d3, &bat_d4), &mut bat_proof, &gm, rng)
         .unwrap();
-    let result2 = HPA::<IP, LMC, RMC, IPC, D>::verify(&mut hpa_srs_, (&(gamma1.clone()), &(gamma2.clone())),
-    (&c_, &x_, &y_, &d1_, &d2_, &d3_, &d4_), &mut proof_, &gm, rng)
-    .unwrap();
+//     let result2 = HPA::<IP, LMC, RMC, IPC, D>::verify(&mut hpa_srs_, (&(gamma1.clone()), &(gamma2.clone())),
+//     (&c_, &x_, &y_, &d1_, &d2_, &d3_, &d4_), &mut proof_, &gm, rng)
+//    .unwrap();
     bench = start.elapsed().as_millis();
     println!("\t verification time: {} ms", bench);
-    println!("v1, v2 - result : {}", result);
-    println!("u1, u2 - result : {}", result2);
+    println!("batch - result : {}", result);
 }
 
 
