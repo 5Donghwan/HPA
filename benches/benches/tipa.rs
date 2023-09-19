@@ -19,7 +19,7 @@ use ark_std::rand::{rngs::StdRng, Rng, SeedableRng};
 use blake2::Blake2b;
 use digest::Digest;
 
-use std::{ops::MulAssign, time::Instant};
+use std::{ops::MulAssign, time::Instant, env};
 
 fn bench_tipa<IP, LMC, RMC, IPC, P, D, R: Rng>(rng: &mut R, len: usize)
 where
@@ -197,7 +197,11 @@ where
 }
 
 fn main() {
-    const LEN: usize = 16;
+    let arg = env::args().nth(1).unwrap();
+    let power: u32 =arg.parse().unwrap();
+    
+    let LEN = usize::pow(2,power);
+    //const LEN: usize = 16;
     type GC1 = AFGHOCommitmentG1<Bls12_381>;
     type GC2 = AFGHOCommitmentG2<Bls12_381>;
     type SC1 = PedersenCommitment<<Bls12_381 as PairingEngine>::G1Projective>;
@@ -216,41 +220,41 @@ fn main() {
         StdRng,
     >(&mut rng, LEN);
 
-    println!("2) Multiexponentiation G1 inner product...");
-    bench_tipa::<
-        MultiexponentiationInnerProduct<<Bls12_381 as PairingEngine>::G1Projective>,
-        GC1,
-        SC1,
-        IdentityCommitment<
-            <Bls12_381 as PairingEngine>::G1Projective,
-            <Bls12_381 as PairingEngine>::Fr,
-        >,
-        Bls12_381,
-        Blake2b,
-        StdRng,
-    >(&mut rng, LEN);
+    // println!("2) Multiexponentiation G1 inner product...");
+    // bench_tipa::<
+    //     MultiexponentiationInnerProduct<<Bls12_381 as PairingEngine>::G1Projective>,
+    //     GC1,
+    //     SC1,
+    //     IdentityCommitment<
+    //         <Bls12_381 as PairingEngine>::G1Projective,
+    //         <Bls12_381 as PairingEngine>::Fr,
+    //     >,
+    //     Bls12_381,
+    //     Blake2b,
+    //     StdRng,
+    // >(&mut rng, LEN);
 
-    println!("3) Pairing inner product with SRS shift...");
-    bench_tipa_srs_shift::<
-        PairingInnerProduct<Bls12_381>,
-        GC1,
-        GC2,
-        IdentityCommitment<ExtensionFieldElement<Bls12_381>, <Bls12_381 as PairingEngine>::Fr>,
-        Bls12_381,
-        Blake2b,
-        StdRng,
-    >(&mut rng, LEN);
+    // println!("3) Pairing inner product with SRS shift...");
+    // bench_tipa_srs_shift::<
+    //     PairingInnerProduct<Bls12_381>,
+    //     GC1,
+    //     GC2,
+    //     IdentityCommitment<ExtensionFieldElement<Bls12_381>, <Bls12_381 as PairingEngine>::Fr>,
+    //     Bls12_381,
+    //     Blake2b,
+    //     StdRng,
+    // >(&mut rng, LEN);
 
-    println!("4) Multiexponentiation G1 inner product with structured scalar message...");
-    bench_tipa_ssm::<
-        MultiexponentiationInnerProduct<<Bls12_381 as PairingEngine>::G1Projective>,
-        GC1,
-        IdentityCommitment<
-            <Bls12_381 as PairingEngine>::G1Projective,
-            <Bls12_381 as PairingEngine>::Fr,
-        >,
-        Bls12_381,
-        Blake2b,
-        StdRng,
-    >(&mut rng, LEN);
+    // println!("4) Multiexponentiation G1 inner product with structured scalar message...");
+    // bench_tipa_ssm::<
+    //     MultiexponentiationInnerProduct<<Bls12_381 as PairingEngine>::G1Projective>,
+    //     GC1,
+    //     IdentityCommitment<
+    //         <Bls12_381 as PairingEngine>::G1Projective,
+    //         <Bls12_381 as PairingEngine>::Fr,
+    //     >,
+    //     Bls12_381,
+    //     Blake2b,
+    //     StdRng,
+    // >(&mut rng, LEN);
 }
