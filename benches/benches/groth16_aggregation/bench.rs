@@ -1,3 +1,4 @@
+#![allow(unused)]
 use ark_bls12_377::{
     constraints::PairingVar as BLS12PairingVar, Bls12_377, Fr as BLS12Fr,
     FrParameters as BLS12FrParameters,

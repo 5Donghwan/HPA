@@ -71,11 +71,11 @@ where
         x, d3, 
         gm, gm_vec, 
         r_c, r_x, w_vec)
-         = HPA::<IP,CM, P, D>::init_commit(&v1, &v2, &gamma1, &gamma2, rng).unwrap();
+        = HPA::<IP,CM, P, D>::init_commit(&v1, &v2, &gamma1, &gamma2, rng).unwrap();
 
     let (c_, d1_, d2_, 
         x_, d3_, r_c_, w_vec_)
-         = HPA::<IP,CM, P, D>::init_commit2(&u1, &u2, &gamma1, &gamma2,  &gm_vec, &r_x, rng).unwrap();
+        = HPA::<IP,CM, P, D>::init_commit2(&u1, &u2, &gamma1, &gamma2,  &gm_vec, &r_x, rng).unwrap();
 
     // X ?= X'
     let bool_x = x == x_;
@@ -90,11 +90,11 @@ where
     let mut proof =
         HPA::<IP, CM, P, D>::prove(&srs, (&(v1.clone()), &(v2.clone()), &(w_vec.clone())),
         //  &hpa_srs, 
-         (&(gamma1.clone()), &(gamma2.clone())), 
+        (&(gamma1.clone()), &(gamma2.clone())), 
         //  (&(d1.clone()), &(d2.clone()), &(c.clone())),
-         (&r_c, &r_x),// &r_y, &r_d1, &r_d2, &r_d3, &r_d4),
-         &gm,
-         rng
+        (&r_c, &r_x),// &r_y, &r_d1, &r_d2, &r_d3, &r_d4),
+        &gm,
+        rng
         ).unwrap();
 
     // let mut start = Instant::now();
@@ -113,11 +113,11 @@ where
 
     start = Instant::now();
     let result = HPA::<IP,CM, P, D>::verify(&v_srs, (gamma1.clone(), gamma2.clone()),
-         (&c, &x, &d1, &d2, &d3), &mut proof, &gm)
+        (&c, &x, &d1, &d2, &d3), &mut proof, &gm)
         .unwrap();
     let result2 = HPA::<IP, CM, P, D>::verify( &v_srs, (gamma1.clone(), gamma2.clone()),
     (&c_, &x_, &d1_, &d2_, &d3_), &mut proof_, &gm)
-   .unwrap();
+    .unwrap();
     bench = start.elapsed().as_millis();
     println!("\t verification time: {} ms", bench);
 
@@ -133,18 +133,18 @@ fn main() {
     let len = usize::pow(2,power);
     // const LEN: usize = 32;
     type CM = PedersenCommitment<<Bls12_381 as PairingEngine>::G1Projective>;
-    // type GC1 = AFGHOCommitmentG1<Bls12_381>;
-    // type GC2 = AFGHOCommitmentG2<Bls12_381>;
+    //type GC1 = AFGHOCommitmentG1<Bls12_381>;
+    //type GC2 = AFGHOCommitmentG2<Bls12_381>;
     let mut rng = StdRng::seed_from_u64(0u64);
 
     println!("Benchmarking HPA_kzg_with_zk with vector length: {}", len);
 
     println!("1) Pedersen hadamard product...");
     bench_hpa_kzg::<
-        // InnerProduct<Bls12_381>,
+        //PairingInnerProduct<Bls12_381>,
         ScalarInnerProduct<<Bls12_381 as PairingEngine>::Fr>,
-        // GC1,
-        // GC2,
+        //GC1,
+        //GC2,
         CM,
         // IdentityCommitment<ExtensionFieldElement<Bls12_381>, <Bls12_381 as PairingEngine>::Fr>,
         Bls12_381,

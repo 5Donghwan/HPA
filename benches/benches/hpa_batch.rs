@@ -71,12 +71,12 @@ where
         x, y, d3, d4,
         gm, gm_vec, r_c, r_d1, r_d2, r_x, r_y, r_d3, r_d4,
         w_vec, k_vec)
-         = HPA::<IP,LMC,RMC,IPC, D>::init_commit(&v1, &v2, &gamma1, &gamma2, &h1, &h2, rng).unwrap();
+        = HPA::<IP,LMC,RMC,IPC, D>::init_commit(&v1, &v2, &gamma1, &gamma2, &h1, &h2, rng).unwrap();
 
     let (c_, d1_, d2_,
         x_, y_, d3_, d4_,
         w_vec_, k_vec_)
-         = HPA::<IP,LMC,RMC,IPC, D>::init_commit2(&u1, &u2, &gamma1, &gamma2, &h1, &h2, &gm_vec,
+        = HPA::<IP,LMC,RMC,IPC, D>::init_commit2(&u1, &u2, &gamma1, &gamma2, &h1, &h2, &gm_vec,
             &r_c, &r_d1, &r_d2, &r_x, &r_y, &r_d3, &r_d4, rng).unwrap();
 
     // X ?= X'
@@ -111,12 +111,12 @@ where
     start = Instant::now();
     let mut bat_proof =
         HPA::<IP, LMC, RMC, IPC, D>::prove((&(bat_v1.clone()), &(bat_v2.clone()), &(bat_w_vec.clone()), &(bat_k_vec.clone())),
-         &hpa_srs, 
-         (&(gamma1.clone()), &(gamma2.clone())), 
+        &hpa_srs, 
+        (&(gamma1.clone()), &(gamma2.clone())), 
         //  (&(d1.clone()), &(d2.clone()), &(c.clone())),
-         (&bat_r_c, &bat_r_x, &bat_r_y, &bat_r_d1, &bat_r_d2, &bat_r_d3, &bat_r_d4),
-         &gm,
-         rng
+        (&bat_r_c, &bat_r_x, &bat_r_y, &bat_r_d1, &bat_r_d2, &bat_r_d3, &bat_r_d4),
+        &gm,
+        rng
         ).unwrap();
 
     // let mut start = Instant::now();
@@ -149,7 +149,7 @@ where
         ).unwrap();
 
     let result = HPA::<IP, LMC, RMC, IPC, D>::verify(&mut hpa_srs, (&(gamma1.clone()), &(gamma2.clone())),
-         (&bat_c, &bat_x, &bat_y, &bat_d1, &bat_d2, &bat_d3, &bat_d4), &mut bat_proof, &gm, rng)
+        (&bat_c, &bat_x, &bat_y, &bat_d1, &bat_d2, &bat_d3, &bat_d4), &mut bat_proof, &gm, rng)
         .unwrap();
 //     let result2 = HPA::<IP, LMC, RMC, IPC, D>::verify(&mut hpa_srs_, (&(gamma1.clone()), &(gamma2.clone())),
 //     (&c_, &x_, &y_, &d1_, &d2_, &d3_, &d4_), &mut proof_, &gm, rng)

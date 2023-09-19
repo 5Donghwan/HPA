@@ -69,11 +69,11 @@ where
         x, d3, 
         gm, gm_vec, 
         r_c, r_x, w_vec)
-         = HPA::<IP,CM, D>::init_commit(&v1, &v2, &gamma1, &gamma2, rng).unwrap();
+        = HPA::<IP,CM, D>::init_commit(&v1, &v2, &gamma1, &gamma2, rng).unwrap();
 
     let (c_, d1_, d2_, 
         x_, d3_, r_c_, w_vec_)
-         = HPA::<IP,CM, D>::init_commit2(&u1, &u2, &gamma1, &gamma2,  &gm_vec, &r_x, rng).unwrap();
+        = HPA::<IP,CM, D>::init_commit2(&u1, &u2, &gamma1, &gamma2,  &gm_vec, &r_x, rng).unwrap();
 
     // X ?= X'
     let bool_x = x == x_;
@@ -111,11 +111,11 @@ where
 
     start = Instant::now();
     let result = HPA::<IP,CM, D>::verify( (gamma1.clone(), gamma2.clone()),
-         (&c, &x, &d1, &d2, &d3), &mut proof, &gm)
+        (&c, &x, &d1, &d2, &d3), &mut proof, &gm)
         .unwrap();
     let result2 = HPA::<IP, CM, D>::verify( (gamma1.clone(), gamma2.clone()),
     (&c_, &x_, &d1_, &d2_, &d3_), &mut proof_, &gm)
-   .unwrap();
+    .unwrap();
     bench = start.elapsed().as_millis();
     println!("\t verification time: {} ms", bench);
 
