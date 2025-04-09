@@ -1,8 +1,6 @@
 <h1 align="center">RHPA (Rust Hadamard Products Arguments)</h1>
 
 <p align="center">
-    <a href="https://travis-ci.org/scipr-lab/ripp"><img src="https://travis-ci.org/scipr-lab/ripp.svg?branch=master"></a>
-    <a href="https://github.com/scipr-lab/ripp/blob/master/AUTHORS"><img src="https://img.shields.io/badge/authors-SCIPR%20Lab-orange.svg"></a>
     <a href="https://github.com/scipr-lab/ripp/blob/master/LICENSE-APACHE"><img src="https://img.shields.io/badge/license-APACHE-blue.svg"></a>
     <a href="https://github.com/scipr-lab/ripp/blob/master/LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
     <a href="https://deps.rs/repo/github/scipr-lab/ripp"><img src="https://deps.rs/repo/github/scipr-lab/ripp/status.svg"></a>
@@ -67,6 +65,9 @@ Unless you explicitly state otherwise, any contribution submitted for inclusion 
 [ripp]: https://eprint.iacr.org/2019/1177
 
 ## Reference paper
+[_Hadamard Product Arguments and Their Applications_][hpa]
+KYEONGTAE LEE, HANKYUNG KO, DONGHWAN OH, JIHYE KIM and HYUNOK OH
+*IACR ePrint Report 2024/981*
 
 [_Proofs for Inner Pairing Products and Applications_][ripp]    
 [Benedikt Bünz](https://www.github.com/bbuenz), Mary Maller, [Pratyush Mishra](https://www.github.com/pratyush), [Psi Vesely](https://www.github.com/psivesely)    
