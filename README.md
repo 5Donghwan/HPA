@@ -65,7 +65,7 @@ Unless you explicitly state otherwise, any contribution submitted for inclusion 
 [ripp]: https://eprint.iacr.org/2019/1177
 
 ## Reference paper
-[_Hadamard Product Arguments and Their Applications_][hpa]
+[_Hadamard Product Arguments and Their Applications_][hpa] 
 KYEONGTAE LEE, HANKYUNG KO, DONGHWAN OH, JIHYE KIM and HYUNOK OH
 *IACR ePrint Report 2024/981*
 
