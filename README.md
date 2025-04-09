@@ -1,4 +1,4 @@
-<h1 align="center">RIPP (Rust Inner Pairing Products)</h1>
+<h1 align="center">RHPA (Rust Hadamard Products Arguments)</h1>
 
 <p align="center">
     <a href="https://travis-ci.org/scipr-lab/ripp"><img src="https://travis-ci.org/scipr-lab/ripp.svg?branch=master"></a>
@@ -8,10 +8,22 @@
     <a href="https://deps.rs/repo/github/scipr-lab/ripp"><img src="https://deps.rs/repo/github/scipr-lab/ripp/status.svg"></a>
 </p>
 
+## HPA
 
-___RIPP___ is a Rust library for proofs about inner pairing products, and applications built atop these. These protocols and applications are described in our paper *"[Proofs for Inner Pairing Products and Applications][ripp]"*
+___HPA___ is a Rust library implementing Hadamard Product Arguments (HPA) based on Inner Pairing Products (IPP). The underlying HPA protocols and the HPA application built atop these are described in our paper *"[Hadamard Product Arguments and Their Applications][hpa]"*.
 
-The library currently contains an implementation of our proof system for verifiably outsourcing pairing products. In the future, we intend to implement the other protocols described in our [paper][ripp], along with the polynomial commitment schemes and our protocol for aggregating Groth16 proofs based upon these protocols.
+The library currently contains an implementation of our HPA mechanism utilizing IPP, enabling the aggregation of certain types of proofs. In the future, we intend to expand support for aggregating other proof systems (such as Garuda and Pari), implement related polynomial commitment schemes, and potentially other protocols leveraging HPA, as discussed in our [paper][hpa].
+
+This library is released under the MIT License and the Apache v2 License (see [License](#license)).
+
+[hpa]: https://eprint.iacr.org/2024/981
+
+## License
+
+
+This project implements HPA features by modifying and extending the ___RIPP___ library (see [https://github.com/arkworks-rs/ripp]). Please refer to the original ___RIPP___ project for its copyright and license information.
+
+This ___HPA___ library itself is distributed under the terms of both the MIT License and the Apache License (Version 2.0). See LICENSE-MIT and LICENSE-APACHE files in the repository for details.
 
 This library is released under the MIT License and the Apache v2 License (see [License](#license)).
 
